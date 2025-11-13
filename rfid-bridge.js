@@ -4,6 +4,8 @@
 const { SerialPort } = require('serialport');
 const { ReadlineParser } = require('@serialport/parser-readline');
 const WebSocket = require('ws');
+const fs = require('fs'); // BARU: Modul untuk interaksi file
+const path = require('path'); // BARU: Modul untuk menangani path file
 
 // === GANTI SESUAI LAPTOP KAMU ===
 // Windows biasanya: 'COM3', 'COM4', dll
@@ -15,6 +17,21 @@ const SERIAL_BAUD_RATE = 9600;        // samakan dengan Serial.begin(...) di ske
 const WS_PORT = 8080;
 const WS_PATH = '/ws/rfid';
 
+// --- BARU: Konfigurasi Logging ---
+const LOG_FILE_PATH = path.join(__dirname, 'rfid_scans.log');
+
+/**
+ * Menulis pesan log ke file dengan timestamp.
+ * @param {string} message Pesan yang akan di-log.
+ */
+function logToFile(message) {
+  const timestamp = new Date().toISOString();
+  const logMessage = `${timestamp} - ${message}\n`;
+
+  fs.appendFile(LOG_FILE_PATH, logMessage, (err) => {
+    if (err) console.error('[RFID-BRIDGE] Failed to write to log file:', err);
+  });
+}
 // --- Setup Serial ---
 const port = new SerialPort({
   path: SERIAL_PORT_PATH,
@@ -24,16 +41,22 @@ const port = new SerialPort({
 const parser = port.pipe(new ReadlineParser({ delimiter: '\n' }));
 
 port.on('open', () => {
-  console.log(`[RFID-BRIDGE] Serial connected on ${SERIAL_PORT_PATH} @ ${SERIAL_BAUD_RATE}`);
+  const message = `Serial connected on ${SERIAL_PORT_PATH} @ ${SERIAL_BAUD_RATE}`;
+  console.log(`[RFID-BRIDGE] ${message}`);
+  logToFile(message); // Log saat koneksi serial berhasil
 });
 
 port.on('error', (err) => {
-  console.error('[RFID-BRIDGE] Serial error:', err.message);
+  const message = `Serial error: ${err.message}`;
+  console.error('[RFID-BRIDGE]', message);
+  logToFile(`ERROR: ${message}`); // Log jika terjadi error
 });
 
 // --- Setup WebSocket Server ---
 const wss = new WebSocket.Server({ port: WS_PORT, path: WS_PATH }, () => {
-  console.log(`[RFID-BRIDGE] WebSocket listening on ws://localhost:${WS_PORT}${WS_PATH}`);
+  const message = `WebSocket listening on ws://localhost:${WS_PORT}${WS_PATH}`;
+  console.log(`[RFID-BRIDGE] ${message}`);
+  logToFile(message); // Log saat server WebSocket siap
 });
 
 wss.on('connection', (ws) => {
@@ -62,6 +85,9 @@ parser.on('data', (line) => {
 
   const uid = raw;
   console.log(`[RFID-BRIDGE] UID from serial: ${uid}`);
+
+  // BARU: Tulis UID yang diterima ke file log
+  logToFile(`UID Scanned: ${uid}`);
 
   // Kirim ke semua frontend yang connect
   broadcast({ type: 'rfid', rfid: uid, timestamp: Date.now() });
