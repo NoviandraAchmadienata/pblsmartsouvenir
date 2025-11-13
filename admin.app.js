@@ -376,7 +376,8 @@ document.addEventListener('DOMContentLoaded', () => {
                         <tr>
                             <th>Product ID</th>
                             <th>Product Name</th>
-                            <th>Stock (Active Tags)</th>
+                            <th>Active Stock</th>
+                            <th>Deactivated Tags</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -386,7 +387,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const inventoryTableBody = inventoryListContainer.querySelector('tbody');
 
             if (inventory.length === 0) {
-                inventoryTableBody.innerHTML = '<tr><td colspan="3">No active inventory found.</td></tr>';
+                inventoryTableBody.innerHTML = '<tr><td colspan="4">No inventory found.</td></tr>';
                 return;
             }
 
@@ -403,6 +404,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     <td>${item.product_id}</td>
                     <td>${item.name}</td>
                     <td><strong>${item.stock}</strong> pcs</td>
+                    <td>${item.deactivatedStock} pcs</td>
                 `;
             }
             
@@ -448,6 +450,45 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+    // --- FUNGSI BARU: Gabungkan semua listener aksi tag ---
+    function addTagActionListeners() {
+        document.querySelectorAll('.deactivate-tag-btn').forEach(btn => btn.addEventListener('click', handleDeactivateTag));
+        document.querySelectorAll('.reactivate-tag-btn').forEach(btn => btn.addEventListener('click', handleReactivateTag));
+        document.querySelectorAll('.delete-tag-btn').forEach(btn => btn.addEventListener('click', handleDeleteTag));
+    }
+
+    function refreshInventoryAndModal() {
+        const activeRow = document.querySelector('.inventory-row.active-row');
+        if (activeRow) {
+            showUidDetails(activeRow.dataset.productId, activeRow.dataset.productName);
+        }
+        loadInventory();
+    }
+
+    // --- FUNGSI BARU: Logika untuk mengaktifkan kembali tag ---
+    async function handleReactivateTag(event) {
+        const uid = event.target.dataset.uid;
+        try {
+            const response = await fetch(`http://localhost:3000/api/admin/rfid/reactivate/${uid}`, { method: 'PUT', headers: getAuthHeaders() });
+            const result = await response.json();
+            if (!response.ok) throw new Error(result.error || 'Failed to reactivate tag');
+            showAlert(result.message);
+            refreshInventoryAndModal();
+        } catch (error) {
+            showAlert(`Error: ${error.message}`);
+        }
+    }
+
+    // --- FUNGSI BARU: Logika untuk menghapus tag permanen ---
+    async function handleDeleteTag(event) {
+        const uid = event.target.dataset.uid;
+        showConfirm(`Are you sure you want to permanently delete tag ${uid}? This cannot be undone.`, async () => {
+            await fetch(`http://localhost:3000/api/admin/rfid/delete/${uid}`, { method: 'DELETE', headers: getAuthHeaders() });
+            showAlert(`Tag ${uid} has been deleted.`);
+            refreshInventoryAndModal();
+        });
+    }
+
     async function handleDeactivateTag(event) {
         const uid = event.target.dataset.uid;
         
@@ -463,11 +504,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (!response.ok) throw new Error(result.error || 'Failed to deactivate tag');
                 
                 showAlert(result.message);
-                // Muat ulang detail modal dan daftar inventaris utama
-                const productId = document.querySelector('.inventory-row.active-row')?.dataset.productId;
-                const productName = document.querySelector('.inventory-row.active-row')?.dataset.productName;
-                if (productId && productName) showUidDetails(productId, productName);
-                loadInventory();
+                refreshInventoryAndModal();
             } catch (error) {
                 showAlert(`Error: ${error.message}`);
             }
@@ -489,7 +526,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // === FUNGSI BARU: Tampilkan Modal Detail UID ===
-    async function showUidDetails(productId, productName) {
+    async function showUidDetails(productId, productName, highlightUid = null) {
         modalProductName.textContent = productName;
         modalUidList.innerHTML = '<p>Loading UIDs...</p>';
         modalOverlay.classList.remove('hidden'); // Tampilkan modal
@@ -499,30 +536,102 @@ document.addEventListener('DOMContentLoaded', () => {
                 headers: getAuthHeaders()
             });
             if (!response.ok) throw new Error('Failed to fetch UID details');
-            const uids = await response.json(); // Harusnya array of strings
+            const tags = await response.json(); // Sekarang array of objects {uid, status}
 
             modalUidList.innerHTML = ''; // Kosongkan
             
-            if (uids.length === 0) {
-                modalUidList.innerHTML = '<p>No active UIDs found for this product.</p>';
+            if (tags.length === 0) {
+                modalUidList.innerHTML = '<p>No UIDs found for this product.</p>';
                 return;
             }
 
             // Isi daftar UID
-            uids.forEach(uid => {
+            tags.forEach(tag => {
                 const uidEl = document.createElement('div');
                 uidEl.classList.add('uid-list-item');
+                const statusClass = `status-${tag.status}`;
+
+                // --- BARU: Tambahkan atribut data-uid untuk penyorotan ---
+                uidEl.setAttribute('data-uid', tag.uid);
+
+                let actionButtons = '';
+                if (tag.status === 'active') {
+                    actionButtons = `<button class="deactivate-tag-btn" data-uid="${tag.uid}">Deactivate</button>`;
+                } else if (tag.status === 'deactivated') {
+                    actionButtons = `
+                        <button class="reactivate-tag-btn" data-uid="${tag.uid}">Reactivate</button>
+                        <button class="delete-tag-btn" data-uid="${tag.uid}">Delete</button>
+                    `;
+                } else { // sold
+                    actionButtons = `<span>-</span>`;
+                }
+
                 uidEl.innerHTML = `
-                    <span>${uid}</span>
-                    <button class="deactivate-tag-btn" data-uid="${uid}">Deactivate</button>
+                    <div class="uid-info">
+                        <span>${tag.uid}</span>
+                        <span class="status-badge ${statusClass}">${tag.status}</span>
+                    </div>
+                    <div class="uid-actions">${actionButtons}</div>
                 `;
                 modalUidList.appendChild(uidEl);
             });
 
-            addDeactivateTagListeners(); // Pasang listener ke tombol baru
+            // --- LOGIKA BARU: Sorot UID yang dicari ---
+            if (highlightUid) {
+                const itemToHighlight = modalUidList.querySelector(`.uid-list-item[data-uid="${highlightUid}"]`);
+                if (itemToHighlight) {
+                    itemToHighlight.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    itemToHighlight.classList.add('highlight');
+                    setTimeout(() => itemToHighlight.classList.remove('highlight'), 2000); // Hapus sorotan setelah 2 detik
+                }
+            }
+
+            addTagActionListeners(); // Pasang listener ke semua tombol aksi
+
+            // --- LOGIKA BARU: Fitur Pencarian UID ---
+            const searchInput = document.getElementById('uid-search-input');
+            const allUidItems = modalUidList.querySelectorAll('.uid-list-item');
+
+            searchInput.addEventListener('input', () => {
+                const searchTerm = searchInput.value.toLowerCase();
+                allUidItems.forEach(item => {
+                    const uidText = item.querySelector('.uid-info span:first-child').textContent.toLowerCase();
+                    if (uidText.includes(searchTerm)) {
+                        item.style.display = 'flex';
+                    } else {
+                        item.style.display = 'none';
+                    }
+                });
+            });
+
         } catch (error) {
             console.error('Failed to load UID details:', error);
             modalUidList.innerHTML = `<p style="color: red;">Error: ${error.message}</p>`;
+        }
+    }
+
+    // === FUNGSI BARU: Logika untuk pencarian UID dari halaman inventaris ===
+    async function handleInventoryUidSearch() {
+        const searchInput = document.getElementById('inventory-uid-search-input');
+        const uid = searchInput.value.trim();
+        if (!uid) {
+            showAlert('Please enter a UID to search.');
+            return;
+        }
+
+        try {
+            const response = await fetch(`http://localhost:3000/api/admin/tag-details/${uid}`, { headers: getAuthHeaders() });
+            const data = await response.json();
+            if (!response.ok) {
+                throw new Error(data.error || 'Failed to find tag.');
+            }
+
+            // Buka modal untuk produk yang ditemukan dan kirim UID untuk disorot
+            showUidDetails(data.productId, data.productName, uid);
+            searchInput.value = ''; // Kosongkan input setelah pencarian berhasil
+
+        } catch (error) {
+            showAlert(`Error: ${error.message}`);
         }
     }
 
@@ -539,6 +648,10 @@ document.addEventListener('DOMContentLoaded', () => {
             closeModal();
         }
     });
+
+    // === LISTENER BARU: Untuk tombol pencarian UID di inventaris ===
+    document.getElementById('inventory-uid-search-btn').addEventListener('click', handleInventoryUidSearch);
+    document.getElementById('inventory-uid-search-input').addEventListener('keypress', (e) => e.key === 'Enter' && handleInventoryUidSearch());
 
     // === LOGIKA LAPORAN (Tidak Berubah) ===
     document.getElementById('report-period').addEventListener('change', (e) => {

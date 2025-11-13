@@ -421,6 +421,62 @@ tr.status-inactive td { color: #999; }
     color: #555;
 }
 
+/* Bagian Pencarian UID di Halaman Inventaris */
+/* Dihapus karena section pencarian terpisah sudah tidak ada */
+/* .uid-search-section { ... } */
+
+/* BARU: Style untuk header tabel stok yang berisi judul dan pencarian */
+.stock-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px; /* Jarak ke tabel */
+}
+.stock-header h2 {
+    margin: 0; /* Hapus margin default dari h2 */
+}
+.uid-search-inline {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+.uid-search-inline input {
+    margin-bottom: 0; /* Override margin default */
+    padding: 8px 12px; /* Buat lebih kecil agar pas */
+    padding: 10px 15px; /* Sesuaikan padding agar lebih seimbang */
+    font-size: 14px;
+    border: 1px solid #ddd; /* Tambahkan border yang konsisten */
+    border-radius: 5px; /* Samakan radius dengan tombol */
+    min-width: 250px; /* Beri lebar minimum */
+}
+.uid-search-inline button {
+    padding: 10px 20px;
+    font-size: 14px;
+    border-radius: 5px;
+    border: none;
+    cursor: pointer;
+    background-color: #007bff; /* BARU: Warna biru seperti tombol lain */
+    color: white; /* BARU: Teks putih */
+    transition: background-color 0.2s; /* BARU: Efek hover */
+}
+.uid-search-inline button:hover {
+    background-color: #0056b3; /* BARU: Warna biru lebih gelap saat hover */
+}
+
+/* UID Search Input di dalam Modal */
+#uid-search-input {
+    width: 100%;
+    padding: 10px;
+    margin-bottom: 15px;
+    border: 1px solid #ddd;
+    border-radius: 5px;
+    font-size: 14px;
+}
+#uid-search-input:focus {
+    outline: none;
+    border-color: #007bff;
+}
+
 /* Kotak untuk daftar UID */
 .uid-list-box {
     background-color: #f9f9f9;
@@ -435,13 +491,24 @@ tr.status-inactive td { color: #999; }
 .uid-list-item {
     display: block;
     background-color: #fff;
-    padding: 8px 12px;
+    padding: 10px 12px;
     border-bottom: 1px solid #eee;
-    font-family: 'Courier New', Courier, monospace;
     font-size: 14px;
     display: flex;
     justify-content: space-between;
     align-items: center;
+}
+.uid-info {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+}
+.uid-info span:first-child {
+    font-family: 'Courier New', Courier, monospace;
+}
+.uid-actions {
+    display: flex;
+    gap: 5px;
 }
 .uid-list-item:last-child {
     border-bottom: none;
@@ -449,13 +516,44 @@ tr.status-inactive td { color: #999; }
 .deactivate-tag-btn {
     background-color: #ffc107;
     color: #333;
-    padding: 4px 8px;
+    padding: 5px 10px;
     border-radius: 4px;
     border: none;
     cursor: pointer;
     font-size: 12px;
 }
 .deactivate-tag-btn:hover { background-color: #e0a800; }
+
+/* Tombol Reactivate Tag */
+.reactivate-tag-btn {
+    background-color: #28a745; /* Hijau */
+    color: white;
+    padding: 5px 10px;
+    border-radius: 4px;
+    border: none;
+    cursor: pointer;
+    font-size: 12px;
+}
+.reactivate-tag-btn:hover { background-color: #218838; }
+
+/* Tombol Delete Tag di halaman Tag Management */
+.delete-tag-btn {
+    background-color: #dc3545; /* Merah */
+    color: white;
+    padding: 5px 10px;
+    border-radius: 4px;
+    border: none;
+    cursor: pointer;
+    font-size: 12px;
+}
+.delete-tag-btn:hover { background-color: #c82333; }
+
+/* Efek sorotan untuk UID yang dicari */
+.uid-list-item.highlight {
+    background-color: #e6f7ff !important;
+    border-left: 4px solid #007bff;
+    transition: background-color 0.3s ease-in-out;
+}
 
 /* Logika Halaman (Page) */
 .page { display: none; }

@@ -35,8 +35,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const payQrisBtn = document.getElementById('pay-qris-btn');
     const paymentSelectionDiv = document.getElementById('payment-selection');
     const qrisDisplayDiv = document.getElementById('qris-display');
-    const qrisImage = document.getElementById('qris-image');
+    const qrisImage = document.getElementById('qris-image'); // Ini sekarang adalah <img>
     const paymentSuccessDiv = document.getElementById('payment-success');
+    const qrisImageContainer = document.getElementById('qris-image-container'); // Ganti <img> dengan <canvas>
     const simulatePaymentBtn = document.getElementById('simulate-payment-success');
     const newOrderBtn = document.getElementById('new-order-btn');
     const cancelTransactionBtn = document.getElementById('cancel-transaction-btn');
@@ -318,11 +319,10 @@ document.addEventListener('DOMContentLoaded', () => {
             // --- Jika fetch di atas aktif, ganti logika ID Transaksi dengan ini ---
             currentTransactionId = data.transaction_id; // Dapat ID dari backend
             document.getElementById('qris-tx-id').textContent = `Order ID: ${currentTransactionId}`;
-            //qrisImage.src = data.qrisUrl;
-
-            // SIMULASI (Sesuai kode Anda)
-            qrisImage.src = data.qrisUrl;
             
+            // --- DIKEMBALIKAN: Gunakan qrisUrl untuk menampilkan gambar QR mock ---
+            qrisImage.src = data.qrisUrl;
+
             // --- LOGIKA BARU: Mulai timer pembatalan otomatis ---
             qrisTimeoutId = setTimeout(() => {
                 // Fungsi ini akan berjalan jika tidak ada pembayaran setelah 60 detik
