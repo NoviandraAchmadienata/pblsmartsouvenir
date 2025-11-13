@@ -25,8 +25,8 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- AKHIR KODE BARU ---
 
     // Referensi Elemen DOM
-    const rfidInput = document.getElementById('rfid-input');
-    const scanBtn = document.getElementById('scan-btn');
+    const rfidInput = document.getElementById('rfid-input') || null;
+    const scanBtn = document.getElementById('scan-btn') || null;
     const cartItemsContainer = document.getElementById('cart-items');
     const totalItemsCountEl = document.getElementById('total-items-count');
     const totalPriceDisplayEl = document.getElementById('total-price-display');
@@ -61,6 +61,47 @@ document.addEventListener('DOMContentLoaded', () => {
     let activeDiscounts = [];
     let currentTransactionId = null;
     let qrisTimeoutId = null; // ID untuk timer pembatalan otomatis
+
+        // === KONEKSI WEBSOCKET RFID BRIDGE ===
+    // Frontend akan dengerin event dari rfid-bridge.js (ws://localhost:8080/ws/rfid)
+    (function setupRfidWebSocket() {
+        const WS_URL = 'ws://localhost:8080/ws/rfid';
+
+        let ws;
+        function connect() {
+            console.log('[KIOSK] Connecting to RFID WebSocket...');
+            ws = new WebSocket(WS_URL);
+
+            ws.onopen = () => {
+                console.log('[KIOSK] RFID WebSocket connected');
+            };
+
+            ws.onclose = () => {
+                console.warn('[KIOSK] RFID WebSocket disconnected, retry in 3s...');
+                // auto reconnect
+                setTimeout(connect, 3000);
+            };
+
+            ws.onerror = (err) => {
+                console.error('[KIOSK] RFID WebSocket error:', err);
+            };
+
+            ws.onmessage = (event) => {
+                try {
+                    const data = JSON.parse(event.data);
+                    // Kita expect format: { type: 'rfid', rfid: 'uid333' }
+                    if (data.type === 'rfid' && data.rfid) {
+                        console.log('[KIOSK] RFID tag received from WS:', data.rfid);
+                        handleRfidScan(data.rfid);
+                    }
+                } catch (e) {
+                    console.error('[KIOSK] Invalid WS message:', e);
+                }
+            };
+        }
+
+        connect();
+    })();
 
     // --- FUNGSI HELPER UNTUK MERESET PANEL PEMBAYARAN ---
     function resetPaymentPanel() {
@@ -121,54 +162,33 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // --- FUNGSI UTAMA ---
-    async function handleRfidScan(uid) {
-        resetPaymentPanel(); // Reset panel pembayaran setiap kali ada scan baru
+async function handleRfidScan(uid) {
+    resetPaymentPanel();
 
-        if (!uid) return;
+    if (!uid) return;
 
-        if (cart.find(item => item.uid === uid)) {
-            showKioskAlert('Item sudah ada di keranjang.');
-            rfidInput.value = '';
-            return;
-        }
-
-        try {
-            // Panggil backend Anda untuk mendapatkan info produk dari UID
-            const response = await fetch(`http://localhost:3000/api/product/${uid}`);
-            
-            if (!response.ok) {
-                 // Tangani jika UID tidak ditemukan oleh backend
-                showKioskAlert('UID produk tidak ditemukan di database!');
-                rfidInput.value = '';
-                return;
-            }
-            
-            const product = await response.json();
-
-            // --- DATA MOCK (Sudah digantikan oleh fetch di atas) ---
-            // const mockProducts = { ... };
-            // const product = mockProducts[uid];
-            
-            if (!product) {
-                // Ini seharusnya tidak terjadi jika response.ok, tapi sebagai penjaga
-                showKioskAlert('Gagal memproses data produk.');
-                rfidInput.value = '';
-                return;
-            }
-            // --- AKHIR DATA MOCK ---
-
-            cart.push({ uid: uid, ...product, qty: 1 });
-            aggregateCart();
-            updateCartUI();
-
-        } catch (error) {
-            console.error('Error fetching product:', error);
-            // Tangani error koneksi ke backend
-            showKioskAlert('Gagal terhubung ke server. Pastikan server backend berjalan.');
-        }
-
-        rfidInput.value = '';
+    if (cart.find(item => item.uid === uid)) {
+        showKioskAlert('Item sudah ada di keranjang.');
+        if (rfidInput) rfidInput.value = '';
+        return;
     }
+
+    const response = await fetch(`http://localhost:3000/api/product/${uid}`);
+
+    if (!response.ok) {
+        showKioskAlert('UID produk tidak ditemukan di database!');
+        if (rfidInput) rfidInput.value = '';
+        return;
+    }
+
+    const product = await response.json();
+
+    cart.push({ uid: uid, ...product, qty: 1 });
+    aggregateCart();
+    updateCartUI();
+
+    if (rfidInput) rfidInput.value = '';
+}
 
     function aggregateCart() {
         productMap.clear();
@@ -373,12 +393,15 @@ document.addEventListener('DOMContentLoaded', () => {
     fetchDiscount(); // Ambil info diskon saat aplikasi dimuat
 
     // --- Event Listeners ---
+   if (scanBtn && rfidInput) {
     scanBtn.addEventListener('click', () => handleRfidScan(rfidInput.value));
+
     rfidInput.addEventListener('keypress', (e) => {
         if (e.key === 'Enter') {
             handleRfidScan(rfidInput.value);
         }
     });
+}
 
     payQrisBtn.addEventListener('click', handlePayment);
     
