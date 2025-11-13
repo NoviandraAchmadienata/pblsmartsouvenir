@@ -74,6 +74,10 @@
                 </div>
                 <div class="content-box" style="margin-top: 20px;">
                     <h2>Existing Products</h2>
+                    <!-- BARU: Bilah pencarian untuk produk -->
+                    <div class="form-section" style="margin-bottom: 20px;">
+                        <input type="text" id="product-search-input" placeholder="Search products by name...">
+                    </div>
                     <div id="existing-products-list"></div>
                 </div>
             </div>
@@ -95,7 +99,7 @@
                         <h2>Inventory Summary</h2>
                         <!-- BARU: Pindahkan bilah pencarian ke sini -->
                         <div class="uid-search-inline">
-                            <input type="text" id="inventory-uid-search-input" placeholder="Search UID...">
+                            <input type="text" id="inventory-uid-search-input" placeholder="Search by Product Name or UID...">
                             <button id="inventory-uid-search-btn">Search</button>
                         </div>
                     </div>
@@ -166,6 +170,21 @@
                     <label for="edit-product-price">Product Price (Rp):</label>
                     <input type="number" id="edit-product-price" step="1">
                     <button id="save-product-changes-btn">Save Changes</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- MODAL BARU: Untuk Registrasi Tag RFID Cepat -->
+        <div id="register-tag-modal" class="modal-overlay hidden">
+            <div class="modal-content">
+                <span class="modal-close-btn">&times;</span>
+                <h2>Register Tag for <span id="register-modal-product-name"></span></h2>
+                <input type="hidden" id="register-modal-product-id">
+                <div class="form-section">
+                    <label for="register-modal-uid">Scan RFID Tag:</label>
+                    <input type="text" id="register-modal-uid" placeholder="UID will appear here...">
+                    <button id="register-modal-btn">Register This Tag</button>
+                    <div id="register-modal-status" class="register-status-box"></div>
                 </div>
             </div>
         </div>

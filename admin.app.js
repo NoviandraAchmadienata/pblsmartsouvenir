@@ -52,6 +52,11 @@ document.addEventListener('DOMContentLoaded', () => {
     const customConfirmOkBtn = document.getElementById('custom-confirm-ok-btn');
     const customConfirmCancelBtn = document.getElementById('custom-confirm-cancel-btn');
 
+    // === BARU: Referensi Elemen Modal Registrasi Tag ===
+    const registerTagModal = document.getElementById('register-tag-modal');
+    const registerTagModalCloseBtn = registerTagModal.querySelector('.modal-close-btn');
+    const registerModalBtn = document.getElementById('register-modal-btn');
+
     // === Referensi Tombol Aksi (Penting untuk listener) ===
     const saveChangesBtn = document.getElementById('save-product-changes-btn');
 
@@ -78,6 +83,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 loadInventory();
             } else if (pageId === 'discounts') {
                 loadDiscountsPage();
+            }
+            // BARU: Panggil listener pencarian produk saat halaman aktif
+            if (pageId === 'products') {
+                addProductSearchListener();
             }
         });
     });
@@ -170,13 +179,15 @@ document.addEventListener('DOMContentLoaded', () => {
                     <td>${product.product_id}</td>
                     <td>${product.name}</td>
                     <td>Rp ${product.price.toFixed(2)}</td>
-                    <td style="display: flex; gap: 5px; justify-content: center;">
+                    <td class="product-actions">
+                        <button class="register-tag-product-btn" data-product-id="${product.product_id}" data-product-name="${product.name}">Register Tag</button>
                         <button class="edit-product-btn" data-product-id="${product.product_id}">Edit</button>
                         <button class="delete-product-btn" data-product-id="${product.product_id}">Hapus</button>
                     </td>
                 `;
             }
             addDeleteProductListeners();
+            addRegisterTagProductListeners(); // Panggil listener untuk tombol register tag
             addEditProductListeners(); // Panggil listener untuk tombol edit
         } catch (error) {
             console.error('Failed to load products:', error);
@@ -186,6 +197,30 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
     
+    // --- FUNGSI BARU: Pencarian Produk ---
+    function addProductSearchListener() {
+        const searchInput = document.getElementById('product-search-input');
+        // Pastikan listener hanya ditambahkan sekali
+        searchInput.removeEventListener('input', handleProductSearch);
+        searchInput.addEventListener('input', handleProductSearch);
+    }
+
+    function handleProductSearch(event) {
+        const searchTerm = event.target.value.toLowerCase();
+        const productRows = document.querySelectorAll('#products-table tbody tr');
+        
+        productRows.forEach(row => {
+            // Kolom kedua (index 1) adalah nama produk
+            const productName = row.cells[1].textContent.toLowerCase();
+            if (productName.includes(searchTerm)) {
+                row.style.display = ''; // Tampilkan baris
+            } else {
+                row.style.display = 'none'; // Sembunyikan baris
+            }
+        });
+    }
+
+
     // --- FUNGSI HAPUS DEFINISI PRODUK ---
     function addDeleteProductListeners() {
         document.querySelectorAll('.delete-product-btn').forEach(button => {
@@ -276,6 +311,72 @@ document.addEventListener('DOMContentLoaded', () => {
             console.error('Error updating product:', error);
         }
     });
+
+    // --- FUNGSI BARU: Buka Modal Registrasi Tag ---
+    function addRegisterTagProductListeners() {
+        document.querySelectorAll('.register-tag-product-btn').forEach(button => {
+            button.removeEventListener('click', handleOpenRegisterTagModal);
+            button.addEventListener('click', handleOpenRegisterTagModal);
+        });
+    }
+
+    function handleOpenRegisterTagModal(event) {
+        const productId = event.target.dataset.productId;
+        const productName = event.target.dataset.productName;
+
+        document.getElementById('register-modal-product-name').textContent = productName;
+        document.getElementById('register-modal-product-id').value = productId;
+        document.getElementById('register-modal-uid').value = '';
+        document.getElementById('register-modal-status').innerHTML = ''; // Kosongkan status
+
+        registerTagModal.classList.remove('hidden');
+        // Fokus otomatis ke input UID agar bisa langsung scan
+        setTimeout(() => document.getElementById('register-modal-uid').focus(), 100);
+    }
+
+    function closeRegisterTagModal() {
+        registerTagModal.classList.add('hidden');
+    }
+
+    registerTagModalCloseBtn.addEventListener('click', closeRegisterTagModal);
+    registerTagModal.addEventListener('click', (event) => {
+        if (event.target === registerTagModal) {
+            closeRegisterTagModal();
+        }
+    });
+
+    // --- FUNGSI BARU: Logika untuk tombol register di dalam modal ---
+    async function handleRegisterTagInModal() {
+        const productId = document.getElementById('register-modal-product-id').value;
+        const uidInput = document.getElementById('register-modal-uid');
+        const uid = uidInput.value.trim();
+        const statusBox = document.getElementById('register-modal-status');
+
+        if (!uid) {
+            statusBox.innerHTML = `<p class="status-error">UID cannot be empty.</p>`;
+            return;
+        }
+
+        try {
+            const response = await fetch('http://localhost:3000/api/admin/rfid/register', {
+                method: 'POST',
+                headers: getAuthHeaders(),
+                body: JSON.stringify({ product_id: parseInt(productId), uid: uid })
+            });
+            const result = await response.json();
+            if (!response.ok) throw new Error(result.error || 'Failed to register tag');
+
+            statusBox.innerHTML = `<p class="status-success">✓ Tag ${uid} registered successfully!</p>`;
+            uidInput.value = ''; // Kosongkan untuk scan berikutnya
+            uidInput.focus(); // Tetap fokus di input
+        } catch (error) {
+            statusBox.innerHTML = `<p class="status-error">✗ Error: ${error.message}</p>`;
+            uidInput.select(); // Pilih teks yang error agar mudah diganti
+        }
+    }
+
+    registerModalBtn.addEventListener('click', handleRegisterTagInModal);
+    document.getElementById('register-modal-uid').addEventListener('keypress', (e) => e.key === 'Enter' && handleRegisterTagInModal());
 
     // === LOGIKA: Tambah Produk ===
     document.getElementById('add-product-btn').addEventListener('click', async () => {
@@ -610,28 +711,40 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // === FUNGSI BARU: Logika untuk pencarian UID dari halaman inventaris ===
+    // === FUNGSI DIPERBARUI: Logika untuk pencarian dari halaman inventaris (Nama Produk atau UID) ===
     async function handleInventoryUidSearch() {
         const searchInput = document.getElementById('inventory-uid-search-input');
-        const uid = searchInput.value.trim();
-        if (!uid) {
-            showAlert('Please enter a UID to search.');
+        const searchTerm = searchInput.value.trim().toLowerCase();
+        if (!searchTerm) {
+            // Jika input kosong, tampilkan semua baris lagi
+            document.querySelectorAll('#inventory-table tbody tr').forEach(row => row.style.display = '');
             return;
         }
 
-        try {
-            const response = await fetch(`http://localhost:3000/api/admin/tag-details/${uid}`, { headers: getAuthHeaders() });
-            const data = await response.json();
-            if (!response.ok) {
-                throw new Error(data.error || 'Failed to find tag.');
+        // 1. Coba filter berdasarkan nama produk
+        const inventoryRows = document.querySelectorAll('#inventory-table tbody tr');
+        let matchFound = false;
+        inventoryRows.forEach(row => {
+            const productName = row.cells[1].textContent.toLowerCase();
+            if (productName.includes(searchTerm)) {
+                row.style.display = '';
+                matchFound = true;
+            } else {
+                row.style.display = 'none';
             }
+        });
 
-            // Buka modal untuk produk yang ditemukan dan kirim UID untuk disorot
-            showUidDetails(data.productId, data.productName, uid);
-            searchInput.value = ''; // Kosongkan input setelah pencarian berhasil
-
-        } catch (error) {
-            showAlert(`Error: ${error.message}`);
+        // 2. Jika tidak ada nama produk yang cocok, coba cari sebagai UID
+        if (!matchFound) {
+            try {
+            const response = await fetch(`http://localhost:3000/api/admin/tag-details/${searchTerm}`, { headers: getAuthHeaders() });
+            const data = await response.json();
+            if (!response.ok) throw new Error(data.error || 'Tag not found.');
+            
+            showUidDetails(data.productId, data.productName, searchTerm);
+            } catch (error) {
+                showAlert(`No product name matched '${searchTerm}', and it was not found as a UID.`);
+            }
         }
     }
 

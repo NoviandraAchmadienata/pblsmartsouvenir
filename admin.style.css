@@ -211,10 +211,18 @@ body {
 .content-box tr:nth-child(even) {
     background-color: #fdfdfd;
 }
-.content-box td:last-child {
-    text-align: center;
-    width: 100px;
+
+/* Perbaikan: Style untuk kolom aksi produk */
+.product-actions {
+    display: flex;
+    gap: 5px;
+    justify-content: center;
+    align-items: center;
+    width: auto; /* Biarkan lebar menyesuaikan */
+    min-width: 250px; /* Beri lebar minimum agar tombol tidak terpotong */
 }
+
+
 
 /* Tombol Hapus Produk */
 .delete-product-btn {
@@ -242,6 +250,19 @@ body {
     margin-right: 5px;
 }
 .edit-product-btn:hover { background-color: #0056b3; }
+
+/* BARU: Tombol Register Tag di tabel produk */
+.register-tag-product-btn {
+    background-color: #28a745; /* Hijau */
+    color: white;
+    padding: 5px 10px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 14px;
+    margin-right: 5px;
+}
+.register-tag-product-btn:hover { background-color: #218838; }
 
 /* Tombol Hapus Diskon */
 .delete-discount-btn {
@@ -626,6 +647,24 @@ tr.status-inactive td { color: #999; }
 .modal-btn-secondary:hover { background-color: #5a6268; }
 .modal-btn-danger { background-color: #dc3545; color: white; }
 .modal-btn-danger:hover { background-color: #c82333; }
+
+/* BARU: Style untuk status box di modal registrasi tag */
+.register-status-box {
+    margin-top: 15px;
+    padding: 10px;
+    border-radius: 5px;
+    min-height: 40px;
+}
+.register-status-box p {
+    margin: 0;
+    font-weight: 500;
+}
+.status-success {
+    color: #155724; /* Teks hijau gelap */
+}
+.status-error {
+    color: #721c24; /* Teks merah gelap */
+}
 
 /* === STYLE BARU: HALAMAN LOGIN === */
 .login-body {
