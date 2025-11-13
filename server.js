@@ -12,119 +12,97 @@ const express = require('express');
 const jwt = require('jsonwebtoken'); // Untuk otentikasi
 const bcrypt = require('bcryptjs'); // Untuk hash password
 const cors = require('cors'); // Diperlukan agar frontend bisa memanggil API ini
-const crypto = require('crypto'); // Modul ini ada di file Anda
+const admin = require('firebase-admin');
+const crypto = require('crypto');
 const app = express();
 const PORT = 3000; // Port untuk backend API
 
 app.use(cors()); // Izinkan Cross-Origin Resource Sharing
 app.use(express.json()); // Izinkan server menerima data JSON
 
+// --- BARU: Inisialisasi Firebase Admin SDK ---
+// Menggunakan file kredensial yang Anda berikan.
+const serviceAccount = require('./smartsouvenirshop-firebase-adminsdk-fbsvc-087dafbe12.json');
+
+admin.initializeApp({
+    credential: admin.credential.cert(serviceAccount),
+    // URL Realtime Database Anda dari proyek 'smartsouvenirshop'
+    databaseURL: "https://smartsouvenirshop-default-rtdb.asia-southeast1.firebasedatabase.app"
+});
+
+const db = admin.database(); // Objek untuk berinteraksi dengan Realtime Database
+
 // Kunci rahasia untuk JWT. Di aplikasi produksi, ini HARUS disimpan di environment variable.
 const JWT_SECRET = 'your-super-secret-key-that-is-long-and-secure';
 
-// === MOCK DATABASE (DATABASE SEMENTARA) ===
-let mockDB = {
-    Products: {
-        1: {
-            name: 'Kaos Pens',
-            price: 88000.00
-        },
-        2: {
-            name: 'Keychain Pens"',
-            price: 20000.00
-        },
-        3: {
-            name: 'Tas Pens',
-            price: 120000.00
-        },
-    },
-    RfidTags: {
-        'uid123': {
-            product_id: 1,
-            status: 'active'
-        },
-        'uid456': {
-            product_id: 2,
-            status: 'active'
-        },
-        'uid789': {
-            product_id: 3,
-            status: 'active'
-        },
-        'uid999': {
-            product_id: 1,
-            status: 'active'
-        },
-    },
-    Transactions: [{
-        transaction_id: 20251112204343926,
-        total_amount: 176.000,
-        payment_status: 'completed',
-        qris_charge_id: 'mock-qris-1',
-        created_at: '2025-11-12T11:03:37Z' 
-    }, {
-        transaction_id: 20251113204658219,
-        total_amount: 108.000,
-        payment_status: 'completed',
-        qris_charge_id: 'mock-qris-2',
-        created_at: '2025-11-13T20:46:31Z' 
-    }],
-    TransactionItems: [{
-        item_id: 1,
-        transaction_id: 1,
-        product_id: 3,
-        uid_scanned: 'uid789',
-        price_at_sale: 88000.00
-    }, {
-        item_id: 2,
-        transaction_id: 2,
-        product_id: 1,
-        uid_scanned: 'uid123',
-        price_at_sale: 20000.00
-    }],
-    Discounts: [], // Diubah menjadi array untuk aturan diskon
-    Users: [
-        {
-            id: 1,
-            username: 'admin',
-            // Password di-hash. Password aslinya adalah 'admin123'
-            passwordHash: '$2a$10$E9.pG5s2s5.r5B/DIwU.X.eA.c.Zz.d.E.e.F.g.H.i.J.k.L.m.N', // Ini hanya contoh hash
-            role: 'admin'
-        }
-    ],
-    Settings: {
-        lowStockThreshold: 5
-    },
+// // --- DIKEMBALIKAN: Konfigurasi untuk Integrasi BRI API (dinonaktifkan) ---
+// // Di aplikasi produksi, SIMPAN INI DI ENVIRONMENT VARIABLES, JANGAN DI KODE!
+// const BRI_API_CONFIG = {
+//     baseUrl: 'https://sandbox.partner.api.bri.co.id', // URL Sandbox
+//     clientId: 'S4VAsHIGUGNaq1A7mG8bePuigkVqsgwd', // Diambil dari Consumer Key Anda
+//     clientSecret: 'MPlHG9OaArwGMexV', // Diambil dari Consumer Secret Anda
+//     merchantId: 'YOUR_MERCHANT_ID', // Ganti dengan Merchant ID Anda
+//     terminalId: 'YOUR_TERMINAL_ID' // Ganti dengan Terminal ID Anda
+// };
 
-    // Untuk auto-increment ID
-    _nextProductId: 4,
-    _nextTransactionId: 3, 
-    _nextItemId: 3, 
-    _nextDiscountId: 1,
+// // Variabel untuk menyimpan token BRI dan waktu kedaluwarsanya (dinonaktifkan)
+// let briApiToken = null;
+// let briTokenExpiresAt = 0;
+
+
+// === MOCK DATABASE (DATABASE SEMENTARA) ===
+// Kita akan tetap menggunakan sebagian mockDB untuk data yang belum dimigrasi
+let mockDB = {
+    // mockDB dikosongkan karena semua data persisten sekarang dikelola oleh Firebase.
+    // Hanya data non-persisten (jika ada) yang boleh ada di sini.
 };
 
-// Inisialisasi: Jika Anda ingin membuat hash baru saat server start
+// // Inisialisasi: Jika Anda ingin membuat hash baru saat server start
 // (async () => {
 //     const salt = await bcrypt.genSalt(10);
 //     const hash = await bcrypt.hash('admin123', salt);
-//     console.log('Hash untuk "admin123":', hash); 
-//     // Ganti passwordHash di atas dengan hasil ini jika perlu
+//     console.log('--- HASH BARU UNTUK "admin123" ---');
+//     console.log(hash);
+//     console.log('--- SALIN HASH DI ATAS DAN PASTE KE seed.js ---');
 // })();
 
 // ===========================================
 
 // --- 🔐 ENDPOINT UNTUK OTENTIKASI ---
 app.post('/api/auth/login', async (req, res) => {
-    const { username, password } = req.body;
-    const user = mockDB.Users.find(u => u.username === username);
+    const {
+        username,
+        password
+    } = req.body;
+    // Ambil data user dari Firebase
+    const usersSnapshot = await db.ref('Users').orderByChild('username').equalTo(username).once('value');
+    const usersData = usersSnapshot.val();
 
-    // Contoh perbandingan password (tanpa bcrypt untuk mockDB sederhana ini)
-    if (user && password === 'admin123') { // Ganti dengan bcrypt.compare di DB asli
-        // Buat Token
-        const token = jwt.sign({ userId: user.id, role: user.role }, JWT_SECRET, { expiresIn: '8h' });
-        res.json({ success: true, token });
+    if (!usersData) {
+        return res.status(401).json({ success: false, message: 'Invalid credentials' });
+    }
+
+    const userId = Object.keys(usersData)[0];
+    const user = usersData[userId];
+
+    const isMatch = await bcrypt.compare(password, user.passwordHash);
+
+    if (user && isMatch) {
+        const token = jwt.sign({
+            userId: user.id,
+            role: user.role
+        }, JWT_SECRET, {
+            expiresIn: '8h'
+        });
+        res.json({
+            success: true,
+            token
+        });
     } else {
-        res.status(401).json({ success: false, message: 'Invalid credentials' });
+        res.status(401).json({
+            success: false,
+            message: 'Invalid credentials'
+        });
     }
 });
 
@@ -134,19 +112,24 @@ app.post('/api/auth/login', async (req, res) => {
  * [GET] /api/discounts
  * Dipanggil oleh kiosk pelanggan untuk mendapatkan info diskon saat ini.
  */
-app.get('/api/discounts', (req, res) => {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0); 
-    const activeDiscounts = mockDB.Discounts.filter(d => {
-        if (!d.isActive) return false;
-        if (d.startDate && d.endDate) {
-            const startDate = new Date(d.startDate);
-            const endDate = new Date(d.endDate);
-            return today >= startDate && today <= endDate;
-        }
-        return true;
-    });
-    res.json(activeDiscounts);
+app.get('/api/discounts', async (req, res) => {
+    try {
+        const discountsSnapshot = await db.ref('Discounts').once('value');
+        const allDiscounts = discountsSnapshot.val() || {};
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+
+        const activeDiscounts = Object.values(allDiscounts).filter(d => {
+            if (!d.isActive) return false;
+            if (d.startDate && d.endDate) {
+                return today >= new Date(d.startDate) && today <= new Date(d.endDate);
+            }
+            return true;
+        });
+        res.json(activeDiscounts);
+    } catch (error) {
+        res.status(500).json({ error: 'Failed to fetch discounts' });
+    }
 });
 
 
@@ -155,129 +138,184 @@ app.get('/api/discounts', (req, res) => {
 /**
  * [GET] /api/product/:uid
  */
-app.get('/api/product/:uid', (req, res) => {
-    const {
-        uid
-    } = req.params;
-    const tag = mockDB.RfidTags[uid];
-
+app.get('/api/product/:uid', async (req, res) => {
+    const { uid } = req.params;
     console.log(`Kiosk scan request for UID: ${uid}`);
 
-    if (!tag) {
-        return res.status(404).json({
-            error: 'UID not recognized'
-        });
-    }
-    if (tag.status !== 'active') {
-        return res.status(400).json({
-            error: `Item is not for sale (status: ${tag.status})`
-        });
-    }
-    const product = mockDB.Products[tag.product_id];
-    if (!product) {
-        return res.status(500).json({
-            error: 'Data integrity error: Product definition not found'
-        });
-    }
+    try {
+        // 1. Ambil data tag dari Firebase
+        const tagSnapshot = await db.ref(`RfidTags/${uid}`).once('value');
+        const tag = tagSnapshot.val();
 
-    res.json({
-        uid: uid,
-        product_id: tag.product_id,
-        name: product.name,
-        price: product.price
-    });
+        if (!tag) {
+            return res.status(404).json({ error: 'UID not recognized' });
+        }
+        if (tag.status !== 'active') {
+            return res.status(400).json({ error: `Item is not for sale (status: ${tag.status})` });
+        }
+
+        // 2. Ambil data produk dari Firebase berdasarkan product_id dari tag
+        const productSnapshot = await db.ref(`Products/${tag.product_id}`).once('value');
+        const product = productSnapshot.val();
+
+        if (!product) {
+            return res.status(500).json({ error: 'Data integrity error: Product definition not found' });
+        }
+
+        res.json({ uid: uid, product_id: tag.product_id, ...product });
+    } catch (error) {
+        console.error('Error fetching product by UID:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
 });
 
+// // --- DIKEMBALIKAN: Fungsi Helper untuk Otentikasi BRI API (dinonaktifkan) ---
+// async function getBriApiToken() {
+//     // Jika token masih ada dan belum kedaluwarsa (dengan buffer 60 detik), gunakan token yang ada.
+//     if (briApiToken && Date.now() < briTokenExpiresAt - 60000) {
+//         return briApiToken;
+//     }
+
+//     console.log('Requesting new BRI API token...');
+//     try {
+//         const response = await fetch(`${BRI_API_CONFIG.baseUrl}/oauth/v1/token`, {
+//             method: 'POST',
+//             headers: {
+//                 'Content-Type': 'application/x-www-form-urlencoded'
+//             },
+//             body: new URLSearchParams({
+//                 'client_id': BRI_API_CONFIG.clientId,
+//                 'client_secret': BRI_API_CONFIG.clientSecret
+//             })
+//         });
+
+//         const data = await response.json();
+//         if (!response.ok || !data.access_token) {
+//             throw new Error(data.status.message || 'Failed to get BRI API token');
+//         }
+
+//         briApiToken = data.access_token;
+//         // Simpan waktu kedaluwarsa (dalam milidetik)
+//         briTokenExpiresAt = Date.now() + (parseInt(data.expires_in) * 1000);
+//         console.log('Successfully obtained new BRI API token.');
+//         return briApiToken;
+//     } catch (error) {
+//         console.error('Error getting BRI API token:', error);
+//         throw error; // Lemparkan error agar bisa ditangani oleh pemanggil
+//     }
+// }
 /**
  * [POST] /api/create-payment
  */
-app.post('/api/create-payment', (req, res) => {
+app.post('/api/create-payment', async (req, res) => {
     const {
         uids,
         totalAmount
     } = req.body;
 
     if (!uids || !Array.isArray(uids) || uids.length === 0) {
-        return res.status(400).json({
-            error: 'Invalid cart data'
-        });
+        return res.status(400).json({ error: 'Invalid cart data' });
     }
 
-    const now = new Date();
-    const timestampPart = now.getFullYear().toString() +
-        (now.getMonth() + 1).toString().padStart(2, '0') +
-        now.getDate().toString().padStart(2, '0') +
-        now.getHours().toString().padStart(2, '0') +
-        now.getMinutes().toString().padStart(2, '0') +
-        now.getSeconds().toString().padStart(2, '0');
+    try {
+        // Mengembalikan logika pembuatan ID transaksi ke format string berbasis waktu
+        const now = new Date();
+        const timestampPart = now.getFullYear().toString() +
+            (now.getMonth() + 1).toString().padStart(2, '0') +
+            now.getDate().toString().padStart(2, '0') +
+            now.getHours().toString().padStart(2, '0') +
+            now.getMinutes().toString().padStart(2, '0') +
+            now.getSeconds().toString().padStart(2, '0');
 
-    const randomPart = crypto.randomInt(100, 999).toString();
-    const transaction_id = `${timestampPart}${randomPart}`;
+        const randomPart = crypto.randomInt(100, 999).toString();
+        const transaction_id = `${timestampPart}${randomPart}`;
 
-    const newTransaction = {
-        transaction_id: transaction_id,
-        total_amount: totalAmount,
-        payment_status: 'pending',
-        qris_charge_id: `mock-qris-${transaction_id}`,
-        created_at: new Date().toISOString()
-    };
-    mockDB.Transactions.push(newTransaction);
+        const newTransaction = {
+            transaction_id: transaction_id,
+            total_amount: totalAmount,
+            payment_status: 'pending',
+            qris_charge_id: `mock-qris-${transaction_id}`,
+            created_at: new Date().toISOString()
+        };
 
-    for (const uid of uids) {
-        const tag = mockDB.RfidTags[uid];
-        if (tag) {
-            const product = mockDB.Products[tag.product_id];
-            const newItem = {
-                item_id: mockDB._nextItemId++,
-                transaction_id: transaction_id,
-                product_id: tag.product_id,
-                uid_scanned: uid,
-                price_at_sale: product.price
-            };
-            mockDB.TransactionItems.push(newItem);
+        // Simpan transaksi ke Firebase
+        await db.ref(`Transactions/${transaction_id}`).set(newTransaction);
+
+        // Simpan item-item transaksi
+        for (const uid of uids) {
+            const tagSnapshot = await db.ref(`RfidTags/${uid}`).once('value');
+            const tag = tagSnapshot.val();
+            if (tag) {
+                const productSnapshot = await db.ref(`Products/${tag.product_id}`).once('value');
+                const product = productSnapshot.val();
+                if (product) {
+                    const newItemId = await getNextId('itemId');
+                    const newItem = {
+                        item_id: newItemId,
+                        transaction_id: transaction_id,
+                        product_id: tag.product_id,
+                        uid_scanned: uid,
+                        price_at_sale: product.price
+                    };
+                    await db.ref(`TransactionItems/${newItemId}`).set(newItem);
+                }
+            }
         }
+
+        // --- DIKEMBALIKAN: Gunakan URL mock QR code ---
+        console.log(`Payment created (pending) for TX ID: ${transaction_id}, Amount: ${totalAmount}`);
+        const mockQrisUrl = `https://api.qrserver.com/v1/create-qr-code/?data=PAY-TX-${transaction_id}-AMOUNT-${totalAmount}`;
+
+        res.status(201).json({
+            transaction_id: transaction_id,
+            qrisUrl: mockQrisUrl, // Kembalikan ke qrisUrl
+            totalAmount: totalAmount
+        });
+    } catch (error) {
+        console.error('Error creating payment:', error);
+        res.status(500).json({ error: 'Failed to create payment transaction.' });
     }
-
-    console.log(`Payment created (pending) for TX ID: ${transaction_id}, Amount: ${totalAmount}`);
-
-    const mockQrisUrl = `https://api.qrserver.com/v1/create-qr-code/?data=PAY-TX-${transaction_id}-AMOUNT-${totalAmount}`;
-
-    res.status(201).json({
-        transaction_id: transaction_id,
-        qrisUrl: mockQrisUrl,
-        totalAmount: totalAmount
-    });
 });
 
 /**
  * [POST] /api/payment-webhook
  */
-app.post('/api/payment-webhook', (req, res) => {
-    const {
-        order_id,
-        transaction_status
-    } = req.body;
+app.post('/api/payment-webhook', async (req, res) => {
+    // Sesuaikan dengan payload dari notifikasi BRI
+    const { invoiceId, transactionStatus } = req.body;
 
-    console.log(`Webhook received for TX ID: ${order_id}, Status: ${transaction_status}`);
+    // Untuk simulasi, kita tetap terima format lama
+    const finalInvoiceId = invoiceId || req.body.order_id;
+    const finalStatus = transactionStatus || req.body.transaction_status;
 
-    if (transaction_status === 'settlement' || transaction_status === 'completed') {
-        const tx = mockDB.Transactions.find(t => t.transaction_id == order_id);
-        if (tx) {
-            tx.payment_status = 'completed';
-            console.log(`TX ID: ${order_id} marked as COMPLETED.`);
+    console.log(`Webhook received for TX ID: ${finalInvoiceId}, Status: ${finalStatus}`);
+    try {
+        // Status 'Paid' dari BRI atau 'completed' dari simulasi
+        if (finalStatus === 'Paid' || finalStatus === 'completed') {
+            const txRef = db.ref(`Transactions/${finalInvoiceId}`);
+            const txSnapshot = await txRef.once('value');
+            if (!txSnapshot.exists()) return res.status(404).send('Transaction not found');
 
-            const itemsToUpdate = mockDB.TransactionItems.filter(item => item.transaction_id == order_id);
-            for (const item of itemsToUpdate) {
-                const tag = mockDB.RfidTags[item.uid_scanned];
-                if (tag) {
-                    tag.status = 'sold';
-                    console.log(`Tag ${item.uid_scanned} marked as SOLD.`);
-                }
+            await txRef.update({ payment_status: 'completed' });
+            console.log(`TX ID: ${finalInvoiceId} marked as COMPLETED.`);
+
+            const itemsSnapshot = await db.ref('TransactionItems').orderByChild('transaction_id').equalTo(finalInvoiceId).once('value');
+            if (itemsSnapshot.exists()) {
+                const updates = {};
+                itemsSnapshot.forEach(itemSnap => {
+                    const item = itemSnap.val();
+                    // BARU: Alih-alih mengubah status, kita hapus tag dengan mengaturnya ke null
+                    updates[`/RfidTags/${item.uid_scanned}`] = null;
+                });
+                await db.ref().update(updates);
+                console.log(`All tags for TX ID ${finalInvoiceId} have been DELETED from the database.`);
             }
         }
+        res.status(200).send('OK');
+    } catch (error) {
+        console.error('Webhook error:', error);
+        res.status(500).send('Internal Server Error');
     }
-
-    res.status(200).send('OK');
 });
 
 // --- 🚧 ENDPOINT UNTUK RFID GATE ---
@@ -285,27 +323,26 @@ app.post('/api/payment-webhook', (req, res) => {
 /**
  * [GET] /api/gate/check/:uid
  */
-app.get('/api/gate/check/:uid', (req, res) => {
-    const {
-        uid
-    } = req.params;
-    const tag = mockDB.RfidTags[uid];
+app.get('/api/gate/check/:uid', async (req, res) => {
+    const { uid } = req.params;
+    try {
+        const tagSnapshot = await db.ref(`RfidTags/${uid}`).once('value');
+        if (!tagSnapshot.exists()) {
+            return res.json({ allow: false, reason: 'UID not recognized' });
+        }
 
-    if (!tag) {
-        return res.json({
-            allow: false,
-            reason: 'UID not recognized'
-        });
-    }
-    if (tag.status === 'sold') {
-        return res.json({
-            allow: true
-        });
-    } else {
-        return res.json({
-            allow: false,
-            reason: 'Item not paid'
-        });
+        const tag = tagSnapshot.val();
+        if (tag.status === 'sold') {
+            return res.json({ allow: true });
+        } else {
+            return res.json({
+                allow: false,
+                reason: `Item not paid (status: ${tag.status})`
+            });
+        }
+    } catch (error) {
+        console.error('Gate check error:', error);
+        res.status(500).json({ allow: false, reason: 'Server error' });
     }
 });
 
@@ -315,19 +352,25 @@ const verifyToken = (req, res, next) => {
     const token = authHeader && authHeader.split(' ')[1]; // Bearer <TOKEN>
 
     if (!token) {
-        return res.status(403).json({ message: 'A token is required for authentication' });
+        return res.status(403).json({
+            message: 'A token is required for authentication'
+        });
     }
 
     try {
         const decoded = jwt.verify(token, JWT_SECRET);
         req.user = decoded; // Simpan info user di request
     } catch (err) {
-        return res.status(401).json({ message: 'Invalid Token' });
+        return res.status(401).json({
+            message: 'Invalid Token'
+        });
     }
 
     // Pastikan user adalah admin
     if (req.user.role !== 'admin') {
-        return res.status(403).json({ message: 'Access denied. Admin role required.' });
+        return res.status(403).json({
+            message: 'Access denied. Admin role required.'
+        });
     }
 
     return next();
@@ -335,186 +378,234 @@ const verifyToken = (req, res, next) => {
 
 // --- 👨‍💼 ENDPOINT UNTUK ADMIN PANEL (DILINDUNGI) ---
 
+// --- FUNGSI HELPER BARU untuk ID ---
+async function getNextId(counterName) {
+    const counterRef = db.ref(`_counters/${counterName}`);
+    const result = await counterRef.transaction(currentValue => {
+        // Jika counter belum ada, inisialisasi dengan 1. Jika sudah ada, tambahkan 1.
+        return (currentValue || 0) + 1;
+    });
+    // `result.snapshot.val()` akan berisi nilai baru setelah transaksi selesai.
+    return result.snapshot.val();
+}
+
 /**
  * [GET] /api/admin/settings
  * Mengambil pengaturan global aplikasi.
  */
-app.get('/api/admin/settings', verifyToken, (req, res) => {
-    res.json(mockDB.Settings);
+app.get('/api/admin/settings', verifyToken, async (req, res) => {
+    try {
+        const settingsSnapshot = await db.ref('Settings').once('value');
+        res.json(settingsSnapshot.val() || { lowStockThreshold: 5 }); // Default value
+    } catch (error) {
+        console.error('Error fetching settings:', error);
+        res.status(500).json({ error: 'Failed to fetch settings' });
+    }
 });
 
 /**
  * [PUT] /api/admin/settings
  * Memperbarui pengaturan global aplikasi.
  */
-app.put('/api/admin/settings', verifyToken, (req, res) => {
-    const { lowStockThreshold } = req.body;
+app.put('/api/admin/settings', verifyToken, async (req, res) => {
+    const {
+        lowStockThreshold
+    } = req.body;
 
     if (lowStockThreshold === undefined || typeof lowStockThreshold !== 'number' || lowStockThreshold < 0) {
-        return res.status(400).json({ error: 'Invalid low stock threshold value.' });
+        return res.status(400).json({
+            error: 'Invalid low stock threshold value.'
+        });
     }
 
-    mockDB.Settings.lowStockThreshold = lowStockThreshold;
-    console.log(`Low stock threshold updated to: ${lowStockThreshold}`);
-    res.json({ success: true, message: 'Settings updated successfully!', settings: mockDB.Settings });
+    try {
+        await db.ref('Settings').update({ lowStockThreshold });
+        console.log(`Low stock threshold updated to: ${lowStockThreshold}`);
+        res.json({
+            success: true,
+            message: 'Settings updated successfully!',
+            settings: { lowStockThreshold }
+        });
+    } catch (error) {
+        console.error('Error updating settings:', error);
+        res.status(500).json({ error: 'Failed to update settings' });
+    }
 });
 
 
 /**
  * [GET] /api/admin/products
  */
-app.get('/api/admin/products', verifyToken, (req, res) => {
-    const productList = Object.entries(mockDB.Products).map(([id, data]) => ({
-        product_id: parseInt(id),
-        name: data.name,
-        price: data.price
-    }));
-    res.json(productList);
-});
+app.get('/api/admin/products', verifyToken, async (req, res) => {
+    try {
+        const productsRef = db.ref('Products');
+        const snapshot = await productsRef.once('value');
+        const productsData = snapshot.val();
 
+        if (productsData) {
+            const productList = Object.keys(productsData).map(key => ({
+                product_id: key,
+                ...productsData[key]
+            }));
+            res.json(productList);
+        } else {
+            res.json([]); // Kirim array kosong jika tidak ada produk
+        }
+    } catch (error) {
+        console.error('Error fetching products from Realtime Database:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
 /**
  * [POST] /api/admin/products/define
  */
-app.post('/api/admin/products/define', verifyToken, (req, res) => {
-    const {
-        name,
-        price
-    } = req.body;
+app.post('/api/admin/products/define', verifyToken, async (req, res) => {
+    const { name, price } = req.body;
 
     if (!name || !price) {
-        return res.status(400).json({
-            error: 'Name and price are required'
-        });
+        return res.status(400).json({ error: 'Name and price are required' });
     }
 
-    const newProductId = mockDB._nextProductId++;
-    const newProduct = {
-        name,
-        price: parseFloat(price)
-    };
+    try {
+        const newProductId = await getNextId('productId');
+        const newProduct = {
+            name,
+            price: parseFloat(price)
+        };
 
-    mockDB.Products[newProductId] = newProduct;
+        await db.ref(`Products/${newProductId}`).set(newProduct);
 
-    console.log('New product defined:', {
-        product_id: newProductId,
-        ...newProduct
-    });
-    res.status(201).json({
-        product_id: newProductId,
-        ...newProduct
-    });
+        const responseData = { product_id: newProductId, ...newProduct };
+        console.log('New product defined:', responseData);
+        res.status(201).json(responseData);
+    } catch (error) {
+        console.error('Error defining new product:', error);
+        res.status(500).json({ error: 'Failed to create product.' });
+    }
 });
 
 /**
  * [POST] /api/admin/rfid/register
  */
-app.post('/api/admin/rfid/register', verifyToken, (req, res) => {
-    const {
-        product_id,
-        uid
-    } = req.body;
+app.post('/api/admin/rfid/register', verifyToken, async (req, res) => {
+    const { product_id, uid } = req.body;
 
     if (!product_id || !uid) {
-        return res.status(400).json({
-            error: 'product_id and uid are required'
-        });
-    }
-    if (!mockDB.Products[product_id]) {
-        return res.status(404).json({
-            error: 'Product not found'
-        });
-    }
-    if (mockDB.RfidTags[uid]) {
-        return res.status(400).json({
-            error: 'RFID Tag already registered'
-        });
+        return res.status(400).json({ error: 'product_id and uid are required' });
     }
 
-    mockDB.RfidTags[uid] = {
-        product_id: parseInt(product_id),
-        status: 'active'
-    };
+    try {
+        const productSnapshot = await db.ref(`Products/${product_id}`).once('value');
+        if (!productSnapshot.exists()) {
+            return res.status(404).json({ error: 'Product not found' });
+        }
 
-    console.log(`Tag ${uid} registered to product ${product_id}`);
-    res.status(201).json({
-        success: true,
-        uid: uid,
-        product_id: parseInt(product_id),
-        status: 'active'
-    });
+        const tagSnapshot = await db.ref(`RfidTags/${uid}`).once('value');
+        if (tagSnapshot.exists()) {
+            return res.status(400).json({ error: 'RFID Tag already registered' });
+        }
+
+        const newTag = {
+            product_id: parseInt(product_id),
+            status: 'active'
+        };
+
+        await db.ref(`RfidTags/${uid}`).set(newTag);
+
+        console.log(`Tag ${uid} registered to product ${product_id}`);
+        res.status(201).json({ success: true, uid: uid, ...newTag });
+    } catch (error) {
+        console.error('Error registering RFID tag:', error);
+        res.status(500).json({ error: 'Failed to register tag.' });
+    }
 });
 
 /**
  * [PUT] /api/admin/products/define/:id
  */
-app.put('/api/admin/products/define/:id', verifyToken, (req, res) => {
+app.put('/api/admin/products/define/:id', verifyToken, async (req, res) => {
     const { id } = req.params;
     const { name, price } = req.body;
-
-    if (!mockDB.Products[id]) {
-        return res.status(404).json({ error: 'Product not found' });
-    }
 
     if (!name || typeof price !== 'number' || price < 0) {
         return res.status(400).json({ error: 'Invalid name or price provided.' });
     }
 
-    mockDB.Products[id].name = name;
-    mockDB.Products[id].price = price;
+    try {
+        const productRef = db.ref(`Products/${id}`);
+        const snapshot = await productRef.once('value');
+        if (!snapshot.exists()) {
+            return res.status(404).json({ error: 'Product not found' });
+        }
 
-    const updatedProduct = {
-        product_id: parseInt(id),
-        ...mockDB.Products[id]
-    };
+        const updates = { name, price: parseFloat(price) };
+        await productRef.update(updates);
 
-    console.log(`Product ID ${id} updated:`, updatedProduct);
-    res.json(updatedProduct);
+        const updatedProductData = { product_id: parseInt(id), ...updates };
+        console.log(`Product ID ${id} updated:`, updatedProductData);
+        res.json(updatedProductData);
+    } catch (error) {
+        console.error(`Error updating product ${id}:`, error);
+        res.status(500).json({ error: 'Failed to update product.' });
+    }
 });
 
 /**
  * [DELETE] /api/admin/products/define/:id
  */
-app.delete('/api/admin/products/define/:id', verifyToken, (req, res) => {
-    const {
-        id
-    } = req.params;
-
+app.delete('/api/admin/products/define/:id', verifyToken, async (req, res) => {
+    const { id } = req.params;
     console.log(`Delete request received for Product ID: ${id}`);
 
-    if (!mockDB.Products[id]) {
-        return res.status(404).json({
-            error: 'Product not found'
-        });
+    try {
+        const productSnapshot = await db.ref(`Products/${id}`).once('value');
+        if (!productSnapshot.exists()) {
+            return res.status(404).json({ error: 'Product not found' });
+        }
+
+        const tagsSnapshot = await db.ref('RfidTags').orderByChild('product_id').equalTo(parseInt(id)).once('value');
+        let activeTagCount = 0;
+        if (tagsSnapshot.exists()) {
+            tagsSnapshot.forEach(tagSnap => {
+                if (tagSnap.val().status === 'active') {
+                    activeTagCount++;
+                }
+            });
+        }
+
+        if (activeTagCount > 0) {
+            return res.status(400).json({
+                error: `Cannot delete product. It is still associated with ${activeTagCount} active RFID tag(s).`
+            });
+        }
+
+        await db.ref(`Products/${id}`).remove();
+
+        console.log(`Product ID ${id} deleted successfully.`);
+        res.status(200).json({ success: true, message: 'Product deleted' });
+    } catch (error) {
+        console.error(`Error deleting product ${id}:`, error);
+        res.status(500).json({ error: 'Failed to delete product.' });
     }
-
-    const activeTags = Object.values(mockDB.RfidTags).filter(tag => tag.product_id == id && tag.status === 'active');
-
-    if (activeTags.length > 0) {
-        return res.status(400).json({
-            error: `Cannot delete product. It is still associated with ${activeTags.length} active RFID tag(s).`
-        });
-    }
-
-    delete mockDB.Products[id];
-
-    console.log(`Product ID ${id} deleted successfully.`);
-    res.status(200).json({
-        success: true,
-        message: 'Product deleted'
-    });
 });
 
 /**
  * [GET] /api/admin/discounts
  */
-app.get('/api/admin/discounts', verifyToken, (req, res) => {
-    res.json(mockDB.Discounts);
+app.get('/api/admin/discounts', verifyToken, async (req, res) => {
+    try {
+        const snapshot = await db.ref('Discounts').once('value');
+        const discounts = snapshot.val() ? Object.values(snapshot.val()) : [];
+        res.json(discounts);
+    } catch (error) {
+        res.status(500).json({ error: 'Failed to fetch discounts' });
+    }
 });
 
 /**
  * [POST] /api/admin/discounts
  */
-app.post('/api/admin/discounts', verifyToken, (req, res) => {
+app.post('/api/admin/discounts', verifyToken, async (req, res) => {
     const {
         name,
         percentage,
@@ -530,58 +621,72 @@ app.post('/api/admin/discounts', verifyToken, (req, res) => {
         });
     }
 
-    const newDiscount = {
-        id: mockDB._nextDiscountId++,
-        name,
-        percentage,
-        targetType, 
-        targetId: targetType === 'product' ? parseInt(targetId) : null,
-        startDate: startDate || null,
-        endDate: endDate || null,
-        isActive: true
-    };
+    try {
+        const newDiscountId = await getNextId('discountId');
+        const newDiscount = {
+            id: newDiscountId,
+            name,
+            percentage,
+            targetType,
+            targetId: targetType === 'product' ? parseInt(targetId) : null,
+            startDate: startDate || null,
+            endDate: endDate || null,
+            isActive: true
+        };
 
-    mockDB.Discounts.push(newDiscount);
-    console.log('New discount rule created:', newDiscount);
-    res.status(201).json(newDiscount);
+        await db.ref(`Discounts/${newDiscountId}`).set(newDiscount);
+        console.log('New discount rule created:', newDiscount);
+        res.status(201).json(newDiscount);
+    } catch (error) {
+        res.status(500).json({ error: 'Failed to create discount rule' });
+    }
 });
 
 /**
  * [DELETE] /api/admin/discounts/:id
  */
-app.delete('/api/admin/discounts/:id', verifyToken, (req, res) => {
+app.delete('/api/admin/discounts/:id', verifyToken, async (req, res) => {
     const {
         id
     } = req.params;
-    mockDB.Discounts = mockDB.Discounts.filter(d => d.id != id);
-    console.log(`Discount rule ID ${id} deleted.`);
-    res.status(200).json({
-        success: true,
-        message: `Discount rule ID ${id} has been deleted.`
-    });
+    try {
+        await db.ref(`Discounts/${id}`).remove();
+        console.log(`Discount rule ID ${id} deleted.`);
+        res.status(200).json({
+            success: true,
+            message: `Discount rule ID ${id} has been deleted.`
+        });
+    } catch (error) {
+        res.status(500).json({ error: 'Failed to delete discount rule' });
+    }
 });
 
 /**
  * [PUT] /api/admin/discounts/:id/toggle
  * Mengubah status aktif/tidak aktif sebuah aturan diskon.
  */
-app.put('/api/admin/discounts/:id/toggle', verifyToken, (req, res) => {
-    const { id } = req.params;
-    const discount = mockDB.Discounts.find(d => d.id == id);
+app.put('/api/admin/discounts/:id/toggle', verifyToken, async (req, res) => {
+    const {
+        id
+    } = req.params;
+    try {
+        const discountRef = db.ref(`Discounts/${id}`);
+        const snapshot = await discountRef.once('value');
+        if (!snapshot.exists()) {
+            return res.status(404).json({ error: 'Discount rule not found' });
+        }
+        const discount = snapshot.val();
+        const newStatus = !discount.isActive;
+        await discountRef.update({ isActive: newStatus });
 
-    if (!discount) {
-        return res.status(404).json({ error: 'Discount rule not found' });
+        console.log(`Discount rule ID ${id} status toggled to: ${newStatus}`);
+        res.json({
+            success: true,
+            message: `Discount rule ID ${id} status changed to ${newStatus ? 'active' : 'inactive'}.`
+        });
+    } catch (error) {
+        res.status(500).json({ error: 'Failed to toggle discount status' });
     }
-
-    // Toggle the status
-    discount.isActive = !discount.isActive;
-
-    console.log(`Discount rule ID ${id} status toggled to: ${discount.isActive}`);
-    res.json({
-        success: true,
-        message: `Discount rule ID ${id} status changed to ${discount.isActive ? 'active' : 'inactive'}.`,
-        discount: discount
-    });
 });
 
 // --- ENDPOINT INVENTORY (Tidak Berubah) ---
@@ -589,74 +694,182 @@ app.put('/api/admin/discounts/:id/toggle', verifyToken, (req, res) => {
 /**
  * [GET] /api/admin/inventory
  */
-app.get('/api/admin/inventory', verifyToken, (req, res) => {
+app.get('/api/admin/inventory', verifyToken, async (req, res) => {
     console.log('Inventory summary request received.');
-    const stockCount = {};
-    for (const uid in mockDB.RfidTags) {
-        const tag = mockDB.RfidTags[uid];
-        if (tag.status === 'active') {
+    try {
+        const tagsSnapshot = await db.ref('RfidTags').once('value');
+        const productsSnapshot = await db.ref('Products').once('value');
+        const settingsSnapshot = await db.ref('Settings').once('value');
+
+        const allTags = tagsSnapshot.val() || {};
+        const allProducts = productsSnapshot.val() || {};
+        const settings = settingsSnapshot.val() || { lowStockThreshold: 5 };
+
+        const inventoryCounts = {};
+        // Inisialisasi counter untuk setiap produk
+        for (const productId in allProducts) {
+            inventoryCounts[productId] = { active: 0, deactivated: 0 };
+        }
+
+        // Hitung jumlah tag berdasarkan status
+        for (const uid in allTags) {
+            const tag = allTags[uid];
             const pid = tag.product_id;
-            if (stockCount[pid]) {
-                stockCount[pid]++;
-            } else {
-                stockCount[pid] = 1;
+            if (inventoryCounts[pid]) {
+                if (tag.status === 'active') {
+                    inventoryCounts[pid].active++;
+                } else if (tag.status === 'deactivated') {
+                    inventoryCounts[pid].deactivated++;
+                }
             }
         }
+
+        const inventoryList = Object.keys(allProducts).map(productId => {
+            const product = allProducts[productId];
+            const stock = inventoryCounts[productId]?.active || 0;
+            const deactivatedStock = inventoryCounts[productId]?.deactivated || 0;
+            return {
+                product_id: parseInt(productId),
+                name: product.name,
+                stock: stock, // Stok aktif
+                deactivatedStock: deactivatedStock, // Stok non-aktif
+                isLowStock: stock < settings.lowStockThreshold
+            };
+        });
+        res.json(inventoryList);
+    } catch (error) {
+        console.error('Error fetching inventory:', error);
+        res.status(500).json({ error: 'Failed to fetch inventory' });
     }
-    const inventoryList = Object.keys(stockCount).map(productId => {
-        const product = mockDB.Products[productId];
-        const stock = stockCount[productId];
-        return {
-            product_id: parseInt(productId),
-            name: product ? product.name : 'Unknown/Deleted Product',
-            stock: stock,
-            isLowStock: stock < mockDB.Settings.lowStockThreshold // Gunakan nilai dari settings
-        };
-    });
-    res.json(inventoryList);
 });
 
 /**
  * [GET] /api/admin/inventory/details/:id
  */
-app.get('/api/admin/inventory/details/:id', verifyToken, (req, res) => {
+app.get('/api/admin/inventory/details/:id', verifyToken, async (req, res) => {
     const {
         id
-    } = req.params; 
+    } = req.params;
     console.log(`UID detail request received for Product ID: ${id}`);
-    const uidList = [];
-    for (const uid in mockDB.RfidTags) {
-        const tag = mockDB.RfidTags[uid];
-        if (tag.product_id == id && tag.status === 'active') {
-            uidList.push(uid);
+    try {
+        // Modifikasi: Ambil semua tag untuk produk ini, bukan hanya yang aktif
+        const tagsSnapshot = await db.ref('RfidTags').orderByChild('product_id').equalTo(parseInt(id)).once('value');
+        const tagList = [];
+        if (tagsSnapshot.exists()) {
+            tagsSnapshot.forEach(snap => {
+                tagList.push({ uid: snap.key, status: snap.val().status });
+            });
         }
+        res.json(tagList);
+    } catch (error) {
+        res.status(500).json({ error: 'Failed to fetch UID details' });
     }
-    res.json(uidList); 
 });
 
 /**
  * [PUT] /api/admin/rfid/deactivate/:uid
  * Menonaktifkan sebuah tag RFID (misalnya karena hilang atau rusak).
  */
-app.put('/api/admin/rfid/deactivate/:uid', verifyToken, (req, res) => {
+app.put('/api/admin/rfid/deactivate/:uid', verifyToken, async (req, res) => {
     const { uid } = req.params;
-    const tag = mockDB.RfidTags[uid];
+    try {
+        const tagRef = db.ref(`RfidTags/${uid}`);
+        const snapshot = await tagRef.once('value');
+        if (!snapshot.exists()) {
+            return res.status(404).json({ error: 'RFID Tag not found' });
+        }
+        const tag = snapshot.val();
+        if (tag.status !== 'active') {
+            return res.status(400).json({ error: `Tag is already inactive (status: ${tag.status})` });
+        }
 
-    if (!tag) {
-        return res.status(404).json({ error: 'RFID Tag not found' });
+        await tagRef.update({ status: 'deactivated' });
+
+        console.log(`Tag ${uid} has been deactivated.`);
+        res.json({ success: true, message: `Tag ${uid} has been successfully deactivated.` });
+    } catch (error) {
+        console.error(`Error deactivating tag ${uid}:`, error);
+        res.status(500).json({ error: 'Failed to deactivate tag.' });
     }
+});
 
-    if (tag.status !== 'active') {
-        return res.status(400).json({ error: `Tag is already inactive (status: ${tag.status})` });
+/**
+ * [PUT] /api/admin/rfid/reactivate/:uid
+ * Mengaktifkan kembali sebuah tag RFID yang sebelumnya dinonaktifkan.
+ */
+app.put('/api/admin/rfid/reactivate/:uid', verifyToken, async (req, res) => {
+    const { uid } = req.params;
+    try {
+        const tagRef = db.ref(`RfidTags/${uid}`);
+        const snapshot = await tagRef.once('value');
+        if (!snapshot.exists()) {
+            return res.status(404).json({ error: 'RFID Tag not found' });
+        }
+        const tag = snapshot.val();
+        if (tag.status !== 'deactivated') {
+            return res.status(400).json({ error: `Tag cannot be reactivated (current status: ${tag.status})` });
+        }
+
+        await tagRef.update({ status: 'active' });
+
+        console.log(`Tag ${uid} has been reactivated.`);
+        res.json({ success: true, message: `Tag ${uid} has been successfully reactivated.` });
+    } catch (error) {
+        console.error(`Error reactivating tag ${uid}:`, error);
+        res.status(500).json({ error: 'Failed to reactivate tag.' });
     }
+});
 
-    tag.status = 'deactivated';
+/**
+ * [DELETE] /api/admin/rfid/delete/:uid
+ * Menghapus sebuah tag RFID secara permanen dari database.
+ */
+app.delete('/api/admin/rfid/delete/:uid', verifyToken, async (req, res) => {
+    const { uid } = req.params;
+    try {
+        const tagRef = db.ref(`RfidTags/${uid}`);
+        const snapshot = await tagRef.once('value');
+        if (!snapshot.exists()) {
+            return res.status(404).json({ error: 'RFID Tag not found' });
+        }
 
-    console.log(`Tag ${uid} has been deactivated.`);
-    res.json({
-        success: true,
-        message: `Tag ${uid} has been successfully deactivated.`
-    });
+        await tagRef.remove();
+
+        console.log(`Tag ${uid} has been permanently deleted.`);
+        res.json({ success: true, message: `Tag ${uid} has been permanently deleted.` });
+    } catch (error) {
+        console.error(`Error deleting tag ${uid}:`, error);
+        res.status(500).json({ error: 'Failed to delete tag.' });
+    }
+});
+
+/**
+ * [GET] /api/admin/tag-details/:uid
+ * Mencari detail produk berdasarkan UID tag.
+ */
+app.get('/api/admin/tag-details/:uid', verifyToken, async (req, res) => {
+    const { uid } = req.params;
+    try {
+        const tagRef = db.ref(`RfidTags/${uid}`);
+        const tagSnapshot = await tagRef.once('value');
+        if (!tagSnapshot.exists()) {
+            return res.status(404).json({ error: 'Tag UID not found in the database.' });
+        }
+        const tag = tagSnapshot.val();
+        const productId = tag.product_id;
+
+        const productRef = db.ref(`Products/${productId}`);
+        const productSnapshot = await productRef.once('value');
+        if (!productSnapshot.exists()) {
+            return res.status(404).json({ error: 'Associated product not found.' });
+        }
+        const product = productSnapshot.val();
+
+        res.json({ productId, productName: product.name });
+    } catch (error) {
+        console.error(`Error fetching details for tag ${uid}:`, error);
+        res.status(500).json({ error: 'Internal server error.' });
+    }
 });
 
 // ==========================================
@@ -668,118 +881,98 @@ app.put('/api/admin/rfid/deactivate/:uid', verifyToken, (req, res) => {
 /**
  * [GET] /api/admin/reports
  */
-app.get('/api/admin/reports', verifyToken, (req, res) => {
+app.get('/api/admin/reports', verifyToken, async (req, res) => {
     const {
         period,
         startDate,
         endDate
     } = req.query;
-
     console.log(`Report requested for period: ${period}, Start: ${startDate}, End: ${endDate}`);
 
-    let filteredTransactions = mockDB.Transactions.filter(t => t.payment_status === 'completed');
+    try {
+        const txsSnapshot = await db.ref('Transactions').once('value');
+        const itemsSnapshot = await db.ref('TransactionItems').once('value');
+        const productsSnapshot = await db.ref('Products').once('value');
 
-    if (period !== 'all') {
-        let startRange, endRange;
-        const today = new Date(); // Waktu "sekarang" (waktu lokal server)
+        const allTransactions = txsSnapshot.val() ? Object.values(txsSnapshot.val()) : [];
+        const allItems = itemsSnapshot.val() ? Object.values(itemsSnapshot.val()) : [];
+        const allProducts = productsSnapshot.val() || {};
 
-        if (period === 'custom' && startDate && endDate) {
-            
-            // Logika custom range (Sudah benar)
-            startRange = new Date(`${startDate}T00:00:00`);
-            endRange = new Date(`${endDate}T23:59:59.999`);
+        let filteredTransactions = allTransactions.filter(t => t.payment_status === 'completed');
 
-        } else {
-            
-            // --- INI ADALAH PERBAIKAN LOGIKA ---
-            
-            // 1. Tentukan rentang akhir (endRange)
-            // Selalu set ke AKHIR HARI INI (23:59) untuk laporan non-kustom
-            endRange = new Date(today.getTime());
-            endRange.setHours(23, 59, 59, 999); 
+        if (period !== 'all') {
+            let startRange, endRange;
+            const today = new Date();
 
-            // 2. Tentukan rentang awal (startRange)
-            startRange = new Date(today.getTime()); // Salin tanggal hari ini
+            if (period === 'custom' && startDate && endDate) {
+                startRange = new Date(`${startDate}T00:00:00`);
+                endRange = new Date(`${endDate}T23:59:59.999`);
+            } else {
+                endRange = new Date(today.getTime());
+                endRange.setHours(23, 59, 59, 999);
+                startRange = new Date(today.getTime());
+                startRange.setHours(0, 0, 0, 0);
 
-            switch (period) {
-                case 'daily':
-                    // Mulai dari awal hari ini (00:00)
-                    startRange.setHours(0, 0, 0, 0); 
-                    break;
-                case 'weekly':
-                    // Mundur 7 hari dari hari ini
-                    startRange.setDate(today.getDate() - 7);
-                    // Set ke awal hari (00:00) 7 hari yang lalu
-                    startRange.setHours(0, 0, 0, 0);
-                    break;
-                case 'monthly':
-                    // Mundur 1 bulan dari hari ini
-                    startRange.setMonth(today.getMonth() - 1);
-                    // Set ke awal hari (00:00) 1 bulan yang lalu
-                    startRange.setHours(0, 0, 0, 0);
-                    break;
-                case 'yearly':
-                    // Mundur 1 tahun dari hari ini
-                    startRange.setFullYear(today.getFullYear() - 1);
-                    // Set ke awal hari (00:00) 1 tahun yang lalu
-                    startRange.setHours(0, 0, 0, 0);
-                    break;
+                switch (period) {
+                    case 'weekly':
+                        startRange.setDate(today.getDate() - 7);
+                        break;
+                    case 'monthly':
+                        startRange.setMonth(today.getMonth() - 1);
+                        break;
+                    case 'yearly':
+                        startRange.setFullYear(today.getFullYear() - 1);
+                        break;
+                }
             }
-            // --------------------------------------
+
+            filteredTransactions = filteredTransactions.filter(tx => {
+                const txDate = new Date(tx.created_at);
+                return txDate >= startRange && txDate <= endRange;
+            });
         }
 
-        // Terapkan filter ke transaksi
-        filteredTransactions = filteredTransactions.filter(tx => {
-            const txDate = new Date(tx.created_at); // Konversi string ISO (UTC) ke objek Date
-            return txDate >= startRange && txDate <= endRange;
+        let totalSales = 0;
+        let totalSubtotal = 0;
+        let totalDiscount = 0;
+
+        const formattedTransactions = filteredTransactions.map(tx => {
+            totalSales += tx.total_amount;
+            const itemsInTx = allItems.filter(item => item.transaction_id === tx.transaction_id);
+            const subtotal = itemsInTx.reduce((acc, item) => acc + item.price_at_sale, 0);
+            const discountAmount = subtotal - tx.total_amount;
+            totalSubtotal += subtotal;
+            totalDiscount += discountAmount;
+
+            const productNames = itemsInTx.map(item => allProducts[item.product_id]?.name || 'Unknown').join(', ');
+
+            return {
+                transaction_id: tx.transaction_id,
+                created_at: tx.created_at,
+                total_amount: tx.total_amount,
+                subtotal: subtotal,
+                discount_amount: discountAmount,
+                payment_status: tx.payment_status,
+                item_count: itemsInTx.length,
+                product_names: productNames || 'N/A'
+            };
         });
+
+        res.json({
+            period: period || 'all-time',
+            summary: {
+                totalSales,
+                totalSubtotal,
+                totalDiscount,
+                totalTransactions: filteredTransactions.length
+            },
+            transactions: formattedTransactions
+        });
+
+    } catch (error) {
+        console.error('Error generating report:', error);
+        res.status(500).json({ error: 'Failed to generate report' });
     }
-
-    // Sisa dari fungsi ini (menghitung total, memformat, dll.) tidak perlu diubah
-    let totalSales = 0;
-    let totalSubtotal = 0;
-    let totalDiscount = 0;
-    const formattedTransactions = filteredTransactions.map(tx => {
-        totalSales += tx.total_amount;
-
-        const itemsInTx = mockDB.TransactionItems.filter(item => item.transaction_id === tx.transaction_id);
-        const itemCount = itemsInTx.length;
-
-        // Hitung subtotal dari harga asli saat penjualan
-        const subtotal = itemsInTx.reduce((acc, item) => acc + item.price_at_sale, 0);
-        // Hitung jumlah diskon
-        const discountAmount = subtotal - tx.total_amount;
-
-        totalSubtotal += subtotal;
-        totalDiscount += discountAmount;
-
-        const productNames = itemsInTx.map(item => {
-            const product = mockDB.Products[item.product_id];
-            return product ? product.name : 'Unknown Product';
-        }).join(', ');
-
-        return {
-            transaction_id: tx.transaction_id,
-            created_at: tx.created_at,
-            total_amount: tx.total_amount,
-            subtotal: subtotal,
-            discount_amount: discountAmount,
-            payment_status: tx.payment_status,
-            item_count: itemCount,
-            product_names: productNames || 'N/A'
-        };
-    });
-
-    res.json({
-        period: period || 'all-time',
-        summary: {
-            totalSales: totalSales,
-            totalSubtotal: totalSubtotal,
-            totalDiscount: totalDiscount,
-            totalTransactions: filteredTransactions.length
-        },
-        transactions: formattedTransactions
-    });
 });
 // ==========================================
 // ===      AKHIR DARI KODE PERBAIKAN     ===
@@ -790,5 +983,8 @@ app.get('/api/admin/reports', verifyToken, (req, res) => {
 app.listen(PORT, () => {
     console.log(`======= RFID Self-Service API Server =======`);
     console.log(`Backend berjalan di http://localhost:${PORT}`);
+    // console.log(``);
+    // console.log(`PENTING: Jika menggunakan ngrok, pastikan URL webhook di portal BRI adalah:`);
+    // console.log(`https://astounding-uncalculated-valarie.ngrok-free.dev/api/payment-webhook`);
     console.log(`============================================`);
 });
