@@ -44,6 +44,7 @@ const JWT_SECRET = 'your-super-secret-key-that-is-long-and-secure';
 //     merchantId: 'YOUR_MERCHANT_ID', // Ganti dengan Merchant ID Anda
 //     terminalId: 'YOUR_TERMINAL_ID' // Ganti dengan Terminal ID Anda
 // };
+//INI NGETEST DOANG
 
 // // Variabel untuk menyimpan token BRI dan waktu kedaluwarsanya (dinonaktifkan)
 // let briApiToken = null;
