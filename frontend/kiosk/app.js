@@ -34,17 +34,10 @@ document.addEventListener('DOMContentLoaded', () => {
     const summaryTotalEl = document.getElementById('summary-total');
     const payQrisBtn = document.getElementById('pay-qris-btn');
     const paymentSelectionDiv = document.getElementById('payment-selection');
-    const qrisDisplayDiv = document.getElementById('qris-display');
-    const qrisImage = document.getElementById('qris-image'); // Ini sekarang adalah <img>
+    const waitingPaymentDiv = document.getElementById('waiting-payment-display'); // Ganti dari qris-display
     const paymentSuccessDiv = document.getElementById('payment-success');
-    const qrisImageContainer = document.getElementById('qris-image-container'); // Ganti <img> dengan <canvas>
-    const simulatePaymentBtn = document.getElementById('simulate-payment-success');
     const newOrderBtn = document.getElementById('new-order-btn');
     const cancelTransactionBtn = document.getElementById('cancel-transaction-btn');
-
-    // === BARU: Referensi Elemen Modal Sukses ===
-    const kioskSuccessModal = document.getElementById('kiosk-success-modal');
-    const kioskSuccessTxId = document.getElementById('kiosk-success-tx-id');
 
     // === BARU: Referensi Elemen Modal Alert Kustom Kiosk ===
     const kioskAlertModal = document.getElementById('kiosk-alert-modal');
@@ -63,30 +56,31 @@ document.addEventListener('DOMContentLoaded', () => {
     let qrisTimeoutId = null; // ID untuk timer pembatalan otomatis
 
         // === KONEKSI WEBSOCKET RFID BRIDGE ===
-    // Frontend akan dengerin event dari rfid-bridge.js (ws://localhost:8080/ws/rfid)
+    // Frontend akan mendengarkan event dari rfid-bridge.js (ws://localhost:8080/ws/rfid)
     (function setupRfidWebSocket() {
         const WS_URL = 'ws://localhost:8080/ws/rfid';
 
-        let ws;
+        // Pindahkan 'ws' ke scope yang lebih tinggi agar bisa diakses fungsi lain
+        window.rfidWs = null;
         function connect() {
             console.log('[KIOSK] Connecting to RFID WebSocket...');
-            ws = new WebSocket(WS_URL);
+            window.rfidWs = new WebSocket(WS_URL);
 
-            ws.onopen = () => {
+            window.rfidWs.onopen = () => {
                 console.log('[KIOSK] RFID WebSocket connected');
             };
 
-            ws.onclose = () => {
+            window.rfidWs.onclose = () => {
                 console.warn('[KIOSK] RFID WebSocket disconnected, retry in 3s...');
                 // auto reconnect
                 setTimeout(connect, 3000);
             };
 
-            ws.onerror = (err) => {
+            window.rfidWs.onerror = (err) => {
                 console.error('[KIOSK] RFID WebSocket error:', err);
             };
 
-            ws.onmessage = (event) => {
+            window.rfidWs.onmessage = (event) => {
                 try {
                     const data = JSON.parse(event.data);
                     // Kita expect format: { type: 'rfid', rfid: 'uid333' }
@@ -106,7 +100,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- FUNGSI HELPER UNTUK MERESET PANEL PEMBAYARAN ---
     function resetPaymentPanel() {
         paymentSuccessDiv.classList.add('hidden');
-        qrisDisplayDiv.classList.add('hidden');
+        waitingPaymentDiv.classList.add('hidden');
         paymentSelectionDiv.classList.remove('hidden');
         currentTransactionId = null;
     }
@@ -302,74 +296,119 @@ async function handleRfidScan(uid) {
             return;
         }
 
-        paymentSelectionDiv.classList.add('hidden');
-        qrisDisplayDiv.classList.remove('hidden');
-
         try {
             const uidsToPay = cart.map(item => item.uid);
-            const subtotal = Array.from(productMap.values()).reduce((acc, item) => acc + (item.price * item.qty), 0);
             
-            // Hitung ulang total diskon untuk pembayaran
+            // Siapkan detail item untuk Midtrans
+            const item_details = Array.from(productMap.values()).map(item => ({
+                id: item.product_id,
+                price: item.price,
+                quantity: item.qty,
+                name: item.name.substring(0, 50) // Nama item maks 50 karakter
+            }));
+
+            // Hitung total diskon dan tambahkan sebagai item terpisah dengan harga negatif
             let discountAmount = 0;
             for (const item of productMap.values()) {
                 const itemSubtotal = item.price * item.qty;
                 const productSpecificDiscount = activeDiscounts.find(d => d.targetType === 'product' && d.targetId === item.product_id);
                 const globalDiscount = activeDiscounts.find(d => d.targetType === 'global');
                 let bestDiscountPercentage = Math.max(productSpecificDiscount?.percentage || 0, globalDiscount?.percentage || 0);
-                discountAmount += (itemSubtotal * bestDiscountPercentage) / 100;
+                discountAmount += Math.round((itemSubtotal * bestDiscountPercentage) / 100);
             }
-            const totalAmount = subtotal - discountAmount;
-            
-            // === BARU: Logika ID Transaksi ===
-            // SIMULASI: Buat ID unik sementara (karena fetch di bawah masih dikomentari)
-            // currentTransactionId = `TX-${Date.now().toString().slice(-6)}`; 
-            // Tampilkan ID di layar QRIS
-            document.getElementById('qris-tx-id').textContent = `Order ID: ${currentTransactionId}`;
-            // === AKHIR LOGIKA BARU ===
 
+            if (discountAmount > 0) {
+                item_details.push({
+                    id: 'DISCOUNT',
+                    price: -discountAmount,
+                    quantity: 1,
+                    name: 'Total Discount'
+                });
+            }
 
-            // PANGGIL BACKEND (Kode Anda masih dikomentari, jadi saya biarkan)
+            const totalAmount = Array.from(productMap.values()).reduce((acc, item) => acc + (item.price * item.qty), 0) - discountAmount;
+
+            // Panggil backend untuk mendapatkan token Midtrans
             const response = await fetch('http://localhost:3000/api/create-payment', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ uids: uidsToPay, totalAmount: totalAmount })
+                body: JSON.stringify({ uids: uidsToPay, totalAmount: totalAmount, item_details: item_details })
             });
             const data = await response.json();
-            
-            // --- Jika fetch di atas aktif, ganti logika ID Transaksi dengan ini ---
-            currentTransactionId = data.transaction_id; // Dapat ID dari backend
-            document.getElementById('qris-tx-id').textContent = `Order ID: ${currentTransactionId}`;
-            
-            // --- DIKEMBALIKAN: Gunakan qrisUrl untuk menampilkan gambar QR mock ---
-            qrisImage.src = data.qrisUrl;
+            if (!data.token) throw new Error('Failed to get payment token.');
 
-            // --- LOGIKA BARU: Mulai timer pembatalan otomatis ---
-            qrisTimeoutId = setTimeout(() => {
-                // Fungsi ini akan berjalan jika tidak ada pembayaran setelah 60 detik
-                cancelCurrentTransaction("Transaction cancelled due to inactivity.");
-            }, 60000); // 60000 milidetik = 1 menit
+            currentTransactionId = data.transaction_id;
+
+            // Tampilkan panel "Menunggu Pembayaran"
+            paymentSelectionDiv.classList.add('hidden');
+            waitingPaymentDiv.classList.remove('hidden');
+
+            // Buka popup pembayaran Midtrans Snap
+            window.snap.pay(data.token, {
+                onSuccess: function(result){
+                    console.log('Midtrans onSuccess:', result);
+                    showPaymentSuccess();
+                },
+                onPending: function(result){
+                    console.log('Midtrans onPending:', result);
+                    // Tetap di halaman menunggu
+                },
+                onError: function(result){
+                    console.error('Midtrans onError:', result);
+                    cancelCurrentTransaction('Payment failed or was cancelled.');
+                },
+                onClose: function(){
+                    // Jika user menutup popup tanpa membayar
+                    // Hanya batalkan jika status masih 'pending'
+                    if (currentTransactionId) {
+                        console.log('Customer closed the popup, transaction cancelled.');
+                        cancelCurrentTransaction('Transaction cancelled by user.');
+                    }
+                }
+            });
 
         } catch (error) {
             console.error('Failed to create payment:', error);
-            paymentSelectionDiv.classList.remove('hidden');
-            qrisDisplayDiv.classList.add('hidden');
+            showKioskAlert('Gagal memulai proses pembayaran. Silakan coba lagi.');
+            resetPaymentPanel();
         }
     }
 
-    function showPaymentSuccess() {
+    async function showPaymentSuccess() {
         // --- LOGIKA BARU: Hentikan timer karena pembayaran berhasil ---
         if (qrisTimeoutId) {
             clearTimeout(qrisTimeoutId);
             qrisTimeoutId = null;
         }
 
-        // Sembunyikan panel samping dan tampilkan modal sukses
-        qrisDisplayDiv.classList.add('hidden'); // Sembunyikan QRIS di panel samping
-        kioskSuccessModal.classList.remove('hidden'); // Tampilkan modal sukses
+        // Sembunyikan panel "Menunggu Pembayaran"
+        waitingPaymentDiv.classList.add('hidden');
         
-        // === BARU: Tampilkan ID di layar sukses ===
+        // Jika ada ID transaksi, langsung proses cetak struk
         if (currentTransactionId) {
-            kioskSuccessTxId.textContent = `Transaction ID: ${currentTransactionId}`;
+            // Minta dan cetak struk secara otomatis
+            try {
+                console.log(`[KIOSK] Requesting receipt for TX: ${currentTransactionId}`);
+                const response = await fetch(`http://localhost:3000/api/receipt/${currentTransactionId}`);
+                if (response.ok) {
+                    const receiptText = await response.text();
+
+                    // --- MODIFIKASI: Cetak struk ke konsol browser ---
+                    console.log('\n--- [KIOSK] RECEIPT START ---');
+                    console.log(receiptText);
+                    console.log('--- [KIOSK] RECEIPT END ---\n');
+
+                    // Tetap kirim ke bridge agar bisa dicetak di terminal bridge juga
+                    if (window.rfidWs && window.rfidWs.readyState === WebSocket.OPEN) {
+                        window.rfidWs.send(JSON.stringify({ type: 'print', payload: receiptText }));
+                        console.log('[KIOSK] Print command sent to bridge (for terminal logging).');
+                    } else {
+                        console.error('[KIOSK] Cannot send print command, WebSocket is not connected.');
+                    }
+                }
+            } catch (error) {
+                console.error('[KIOSK] Failed to fetch or print receipt:', error);
+            }
         }
         
         cart = [];
@@ -383,10 +422,10 @@ async function handleRfidScan(uid) {
     }
 
     function resetKiosk() {
-        kioskSuccessModal.classList.add('hidden'); // Sembunyikan modal sukses
-        qrisDisplayDiv.classList.add('hidden');
+        waitingPaymentDiv.classList.add('hidden');
         paymentSelectionDiv.classList.remove('hidden');
         currentTransactionId = null;
+        console.log('[KIOSK] System reset. Ready for new order.');
     }
 
     // --- INISIALISASI ---
@@ -405,26 +444,6 @@ async function handleRfidScan(uid) {
 
     payQrisBtn.addEventListener('click', handlePayment);
     
-    // --- PERBAIKAN: Jadikan simulasi lebih realistis dengan memanggil webhook ---
-    simulatePaymentBtn.addEventListener('click', async () => {
-        if (!currentTransactionId) {
-            showKioskAlert("No active transaction to simulate payment for.");
-            return;
-        }
-        try {
-            // Panggil webhook di backend, seolah-olah payment gateway yang memanggilnya
-            await fetch('http://localhost:3000/api/payment-webhook', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ order_id: currentTransactionId, transaction_status: 'completed' })
-            });
-            showPaymentSuccess(); // Tampilkan layar sukses setelah backend mengkonfirmasi
-        } catch (error) {
-            console.error("Failed to simulate payment webhook:", error);
-            showKioskAlert("Error confirming payment on the backend.");
-        }
-    });
-
     // --- LOGIKA BARU: Listener untuk tombol batal transaksi ---
     cancelTransactionBtn.addEventListener('click', () => {
         cancelCurrentTransaction("Transaction has been cancelled.");

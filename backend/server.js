@@ -14,6 +14,7 @@ const bcrypt = require('bcryptjs'); // Untuk hash password
 const cors = require('cors'); // Diperlukan agar frontend bisa memanggil API ini
 const admin = require('firebase-admin');
 const crypto = require('crypto');
+const midtransClient = require('midtrans-client'); // BARU: Import Midtrans
 const app = express();
 const PORT = 3000; // Port untuk backend API
 
@@ -35,21 +36,14 @@ const db = admin.database(); // Objek untuk berinteraksi dengan Realtime Databas
 // Kunci rahasia untuk JWT. Di aplikasi produksi, ini HARUS disimpan di environment variable.
 const JWT_SECRET = 'your-super-secret-key-that-is-long-and-secure';
 
-// // --- DIKEMBALIKAN: Konfigurasi untuk Integrasi BRI API (dinonaktifkan) ---
-// // Di aplikasi produksi, SIMPAN INI DI ENVIRONMENT VARIABLES, JANGAN DI KODE!
-// const BRI_API_CONFIG = {
-//     baseUrl: 'https://sandbox.partner.api.bri.co.id', // URL Sandbox
-//     clientId: 'S4VAsHIGUGNaq1A7mG8bePuigkVqsgwd', // Diambil dari Consumer Key Anda
-//     clientSecret: 'MPlHG9OaArwGMexV', // Diambil dari Consumer Secret Anda
-//     merchantId: 'YOUR_MERCHANT_ID', // Ganti dengan Merchant ID Anda
-//     terminalId: 'YOUR_TERMINAL_ID' // Ganti dengan Terminal ID Anda
-// };
-//INI NGETEST DOANG
-
-// // Variabel untuk menyimpan token BRI dan waktu kedaluwarsanya (dinonaktifkan)
-// let briApiToken = null;
-// let briTokenExpiresAt = 0;
-
+// --- BARU: Konfigurasi Midtrans ---
+// PENTING: Ganti dengan kunci dari akun Midtrans Sandbox Anda.
+// Di aplikasi produksi, SIMPAN INI DI ENVIRONMENT VARIABLES, JANGAN DI KODE!
+const snap = new midtransClient.Snap({
+    isProduction: false, // Set 'true' untuk mode produksi
+    serverKey: 'Mid-server-ba2imHhzyR-OCWCkcf-CagIK',
+    clientKey: 'Mid-client-78vkOQH-Z-1W_t3b'
+});
 
 // === MOCK DATABASE (DATABASE SEMENTARA) ===
 // Kita akan tetap menggunakan sebagian mockDB untuk data yang belum dimigrasi
@@ -170,48 +164,14 @@ app.get('/api/product/:uid', async (req, res) => {
     }
 });
 
-// // --- DIKEMBALIKAN: Fungsi Helper untuk Otentikasi BRI API (dinonaktifkan) ---
-// async function getBriApiToken() {
-//     // Jika token masih ada dan belum kedaluwarsa (dengan buffer 60 detik), gunakan token yang ada.
-//     if (briApiToken && Date.now() < briTokenExpiresAt - 60000) {
-//         return briApiToken;
-//     }
-
-//     console.log('Requesting new BRI API token...');
-//     try {
-//         const response = await fetch(`${BRI_API_CONFIG.baseUrl}/oauth/v1/token`, {
-//             method: 'POST',
-//             headers: {
-//                 'Content-Type': 'application/x-www-form-urlencoded'
-//             },
-//             body: new URLSearchParams({
-//                 'client_id': BRI_API_CONFIG.clientId,
-//                 'client_secret': BRI_API_CONFIG.clientSecret
-//             })
-//         });
-
-//         const data = await response.json();
-//         if (!response.ok || !data.access_token) {
-//             throw new Error(data.status.message || 'Failed to get BRI API token');
-//         }
-
-//         briApiToken = data.access_token;
-//         // Simpan waktu kedaluwarsa (dalam milidetik)
-//         briTokenExpiresAt = Date.now() + (parseInt(data.expires_in) * 1000);
-//         console.log('Successfully obtained new BRI API token.');
-//         return briApiToken;
-//     } catch (error) {
-//         console.error('Error getting BRI API token:', error);
-//         throw error; // Lemparkan error agar bisa ditangani oleh pemanggil
-//     }
-// }
 /**
  * [POST] /api/create-payment
  */
 app.post('/api/create-payment', async (req, res) => {
     const {
         uids,
-        totalAmount
+        totalAmount,
+        item_details // BARU: Terima detail item dari frontend
     } = req.body;
 
     if (!uids || !Array.isArray(uids) || uids.length === 0) {
@@ -234,13 +194,13 @@ app.post('/api/create-payment', async (req, res) => {
         const newTransaction = {
             transaction_id: transaction_id,
             total_amount: totalAmount,
-            payment_status: 'pending',
-            qris_charge_id: `mock-qris-${transaction_id}`,
+            payment_status: 'pending', // Status awal
             created_at: new Date().toISOString()
         };
 
         // Simpan transaksi ke Firebase
         await db.ref(`Transactions/${transaction_id}`).set(newTransaction);
+        console.log(`Transaction ${transaction_id} created in Firebase with status 'pending'.`);
 
         // Simpan item-item transaksi
         for (const uid of uids) {
@@ -263,15 +223,23 @@ app.post('/api/create-payment', async (req, res) => {
             }
         }
 
-        // --- DIKEMBALIKAN: Gunakan URL mock QR code ---
-        console.log(`Payment created (pending) for TX ID: ${transaction_id}, Amount: ${totalAmount}`);
-        const mockQrisUrl = `https://api.qrserver.com/v1/create-qr-code/?data=PAY-TX-${transaction_id}-AMOUNT-${totalAmount}`;
+        // --- BARU: Buat transaksi dengan Midtrans Snap ---
+        const parameters = {
+            "transaction_details": {
+                "order_id": transaction_id,
+                "gross_amount": totalAmount
+            },
+            "item_details": item_details,
+            // PERUBAHAN: Hanya aktifkan pembayaran QRIS (di Snap diwakili oleh 'gopay')
+            "enabled_payments": ["gopay"]
+        };
 
-        res.status(201).json({
-            transaction_id: transaction_id,
-            qrisUrl: mockQrisUrl, // Kembalikan ke qrisUrl
-            totalAmount: totalAmount
-        });
+        const midtransTransaction = await snap.createTransaction(parameters);
+        const transactionToken = midtransTransaction.token;
+
+        console.log(`Midtrans token created for TX ID: ${transaction_id}`);
+        res.status(201).json({ token: transactionToken, transaction_id: transaction_id });
+
     } catch (error) {
         console.error('Error creating payment:', error);
         res.status(500).json({ error: 'Failed to create payment transaction.' });
@@ -282,25 +250,33 @@ app.post('/api/create-payment', async (req, res) => {
  * [POST] /api/payment-webhook
  */
 app.post('/api/payment-webhook', async (req, res) => {
-    // Sesuaikan dengan payload dari notifikasi BRI
-    const { invoiceId, transactionStatus } = req.body;
+    const notification = req.body;
+    console.log('Midtrans notification received:', JSON.stringify(notification, null, 2));
 
-    // Untuk simulasi, kita tetap terima format lama
-    const finalInvoiceId = invoiceId || req.body.order_id;
-    const finalStatus = transactionStatus || req.body.transaction_status;
-
-    console.log(`Webhook received for TX ID: ${finalInvoiceId}, Status: ${finalStatus}`);
     try {
-        // Status 'Paid' dari BRI atau 'completed' dari simulasi
-        if (finalStatus === 'Paid' || finalStatus === 'completed') {
-            const txRef = db.ref(`Transactions/${finalInvoiceId}`);
+        // 1. Verifikasi notifikasi dari Midtrans
+        const statusResponse = await snap.transaction.notification(notification);
+        const orderId = statusResponse.order_id;
+        const transactionStatus = statusResponse.transaction_status;
+        const fraudStatus = statusResponse.fraud_status;
+
+        console.log(`Transaction notification received. Order ID: ${orderId}, Transaction Status: ${transactionStatus}, Fraud Status: ${fraudStatus}`);
+
+        // 2. Logika untuk menangani status pembayaran
+        // Hanya proses jika transaksi berhasil dan aman
+        if (transactionStatus == 'capture' || transactionStatus == 'settlement') {
+            if (fraudStatus == 'accept') {
+                // Pembayaran berhasil dan aman, update database Anda
+                const txRef = db.ref(`Transactions/${orderId}`);
+                
+                // Pastikan transaksi ada sebelum update
             const txSnapshot = await txRef.once('value');
             if (!txSnapshot.exists()) return res.status(404).send('Transaction not found');
 
             await txRef.update({ payment_status: 'completed' });
-            console.log(`TX ID: ${finalInvoiceId} marked as COMPLETED.`);
+                console.log(`TX ID: ${orderId} marked as COMPLETED.`);
 
-            const itemsSnapshot = await db.ref('TransactionItems').orderByChild('transaction_id').equalTo(finalInvoiceId).once('value');
+                const itemsSnapshot = await db.ref('TransactionItems').orderByChild('transaction_id').equalTo(orderId).once('value');
             if (itemsSnapshot.exists()) {
                 const updates = {};
                 itemsSnapshot.forEach(itemSnap => {
@@ -309,13 +285,95 @@ app.post('/api/payment-webhook', async (req, res) => {
                     updates[`/RfidTags/${item.uid_scanned}`] = null;
                 });
                 await db.ref().update(updates);
-                console.log(`All tags for TX ID ${finalInvoiceId} have been DELETED from the database.`);
+                    console.log(`All tags for TX ID ${orderId} have been DELETED from the database.`);
+                }
             }
         }
+        // Kirim respons OK ke Midtrans agar tidak mengirim notifikasi berulang
         res.status(200).send('OK');
+
     } catch (error) {
         console.error('Webhook error:', error);
         res.status(500).send('Internal Server Error');
+    }
+});
+
+/**
+ * [GET] /api/receipt/:transaction_id
+ * Endpoint baru untuk menghasilkan data teks struk untuk dicetak.
+ */
+app.get('/api/receipt/:transaction_id', async (req, res) => {
+    const { transaction_id } = req.params;
+
+    try {
+        // 1. Ambil data transaksi utama
+        const txSnapshot = await db.ref(`Transactions/${transaction_id}`).once('value');
+        if (!txSnapshot.exists()) {
+            return res.status(404).json({ error: 'Transaction not found' });
+        }
+        const transaction = txSnapshot.val();
+
+        // 2. Ambil semua item yang terkait dengan transaksi ini
+        const itemsSnapshot = await db.ref('TransactionItems').orderByChild('transaction_id').equalTo(transaction_id).once('value');
+        if (!itemsSnapshot.exists()) {
+            return res.status(404).json({ error: 'Transaction items not found' });
+        }
+
+        // 3. Format data untuk dicetak
+        let receiptText = "";
+        const line = "--------------------------------";
+
+        receiptText += "       Smart Souvenir\n";
+        receiptText += "      Jl. Ahmad Yani No. 1\n";
+        receiptText += "           Surabaya\n";
+        receiptText += "   Telp: 0812-3456-7890\n";
+        receiptText += "Email: contact@smartsouvenir.com\n";
+        receiptText += line + "\n";
+        receiptText += `ID: ${transaction.transaction_id}\n`;
+        receiptText += `Tgl: ${new Date(transaction.created_at).toLocaleString('id-ID')}\n`;
+        receiptText += line + "\n\n";
+
+        let subtotal = 0;
+        const productQuantities = {};
+
+        // Agregasi produk
+        for (const itemId in itemsSnapshot.val()) {
+            const item = itemsSnapshot.val()[itemId];
+            subtotal += item.price_at_sale;
+            if (productQuantities[item.product_id]) {
+                productQuantities[item.product_id].qty++;
+            } else {
+                const productSnapshot = await db.ref(`Products/${item.product_id}`).once('value');
+                productQuantities[item.product_id] = {
+                    name: productSnapshot.val()?.name || 'Unknown Product',
+                    price: item.price_at_sale,
+                    qty: 1
+                };
+            }
+        }
+
+        for (const productId in productQuantities) {
+            const p = productQuantities[productId];
+            receiptText += `${p.name}\n`;
+            receiptText += `  ${p.qty} x ${p.price.toLocaleString('id-ID')} = ${(p.qty * p.price).toLocaleString('id-ID')}\n`;
+        }
+
+        receiptText += `\n${line}\n`;
+        receiptText += `Subtotal:   ${subtotal.toLocaleString('id-ID')}\n`;
+        receiptText += `Diskon:     ${(subtotal - transaction.total_amount).toLocaleString('id-ID')}\n`;
+        receiptText += `Total:      ${transaction.total_amount.toLocaleString('id-ID')}\n\n`;
+        receiptText += "   Terima Kasih Atas Kunjungan Anda\n";
+
+        // BARU: Tampilkan struk di konsol server untuk debugging
+        console.log(`\n--- [SERVER] GENERATED RECEIPT FOR TX: ${transaction_id} ---`);
+        console.log(receiptText);
+        console.log('-----------------------------------------------------\n');
+
+        res.type('text/plain').send(receiptText);
+
+    } catch (error) {
+        console.error('Error generating receipt:', error);
+        res.status(500).json({ error: 'Failed to generate receipt' });
     }
 });
 
@@ -983,9 +1041,7 @@ app.get('/api/admin/reports', verifyToken, async (req, res) => {
 // --- SERVER START ---
 app.listen(PORT, () => {
     console.log(`======= RFID Self-Service API Server =======`);
-    console.log(`Backend berjalan di http://localhost:${PORT}`);
-    // console.log(``);
-    // console.log(`PENTING: Jika menggunakan ngrok, pastikan URL webhook di portal BRI adalah:`);
-    // console.log(`https://astounding-uncalculated-valarie.ngrok-free.dev/api/payment-webhook`);
+    console.log(`Backend berjalan di http://localhost:${PORT}`);    
+    console.log(`PENTING: Pastikan URL webhook di portal Midtrans telah dikonfigurasi.`);
     console.log(`============================================`);
 });

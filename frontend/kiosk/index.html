@@ -4,7 +4,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Kasir Self-Service</title> 
+    <title>Kasir Self-Service</title>
+    <!-- BARU: Script Midtrans Snap. Ganti 'data-client-key' dengan Client Key Anda -->
+    <script type="text/javascript" src="https://app.sandbox.midtrans.com/snap/snap.js" data-client-key="Mid-client-78vkOQH-Z-1W_t3b"></script>
     <link rel="stylesheet" href="style.css"> 
 </head>
 
@@ -57,15 +59,10 @@
                 <button class="pay-btn" id="pay-qris-btn">Bayar dengan QRIS</button>
             </div>
 
-            <div id="qris-display" class="hidden">
-                <h4>Pindai untuk Membayar</h4>
-
-                <p id="qris-tx-id" class="transaction-id-display"></p>
-
-                <!-- DIKEMBALIKAN: Gunakan <img> untuk menampilkan URL gambar QR -->
-                <img src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=Example" alt="QRIS Code" id="qris-image">
-                <p>Menunggu pembayaran...</p>
-                <button id="simulate-payment-success">Simulasikan Pembayaran Berhasil</button>
+            <!-- Panel ini sekarang hanya untuk status menunggu -->
+            <div id="waiting-payment-display" class="hidden">
+                <h4>Menunggu Pembayaran...</h4>
+                <p>Silakan selesaikan pembayaran pada jendela yang muncul.</p>
                 <button id="cancel-transaction-btn" class="cancel-btn">Batalkan Transaksi</button>
             </div>
 
@@ -80,18 +77,6 @@
         </aside>
     </div>
 
-    <!-- MODAL PEMBAYARAN SUKSES BARU -->
-    <div id="kiosk-success-modal" class="kiosk-modal-overlay hidden">
-        <div class="kiosk-modal-content success-modal-content">
-            <svg class="checkmark" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 52 52">
-                <path class="checkmark__check" fill="none" d="M14.1 27.2l7.1 7.2 16.7-16.8"/>
-            </svg>
-            <h4 id="kiosk-success-title">Pembayaran Berhasil!</h4>
-            <p id="kiosk-success-message">Terima kasih atas pembelian Anda.</p>
-            <p id="kiosk-success-tx-id" class="transaction-id-display"></p>
-        </div>
-    </div>
-
     <!-- MODAL ALERT KUSTOM BARU UNTUK KIOSK -->
     <div id="kiosk-alert-modal" class="kiosk-modal-overlay hidden">
         <div class="kiosk-modal-content">
@@ -101,7 +86,7 @@
     </div>
 
     <!-- DIHAPUS: Library QR Code tidak lagi diperlukan -->
-    <script src="app.js"></script> 
+    <script src="app.js"></script>
 </body>
 
 </html>

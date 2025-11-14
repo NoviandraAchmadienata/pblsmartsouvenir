@@ -11,6 +11,8 @@
 
 #include <SPI.h>
 #include <MFRC522.h>
+#include <SoftwareSerial.h>   // BARU: Untuk komunikasi dengan printer
+#include "Adafruit_Thermal.h" // BARU: Library untuk printer thermal
 
 // --- Definisi Pin ---
 
@@ -22,62 +24,91 @@
 #define BUZZER_PIN 5
 #define LED_PIN 6       // LED tunggal di Pin 6
 
+// BARU: Pin untuk Thermal Printer (sesuaikan jika perlu)
+#define TX_PIN 3 // Printer RX -> Arduino TX
+#define RX_PIN 2 // Printer TX -> Arduino RX
+
 // Buat instance MFRC522
 MFRC522 rfid(SS_PIN, RST_PIN);
 
+SoftwareSerial mySerial(RX_PIN, TX_PIN); // RX, TX
+Adafruit_Thermal printer(&mySerial);     // Gunakan SoftwareSerial untuk printer
+
 void setup() {
-    Serial.begin(9600);
-    SPI.begin();       // Inisialisasi SPI
-    rfid.PCD_Init(); // Inisialisasi MFRC522
+  Serial.begin(9600);
+  SPI.begin();       // Inisialisasi SPI
+  rfid.PCD_Init(); // Inisialisasi MFRC522
 
   // Atur pin mode untuk indikator
-    pinMode(BUZZER_PIN, OUTPUT);
-    pinMode(LED_PIN, OUTPUT);
+  pinMode(BUZZER_PIN, OUTPUT);
+  pinMode(LED_PIN, OUTPUT);
 
   // Atur kondisi awal (State: Menunggu Barang)
-    digitalWrite(LED_PIN, LOW); // LED mati saat menunggu
-    digitalWrite(BUZZER_PIN, LOW);
+  digitalWrite(LED_PIN, LOW); // LED mati saat menunggu
+  digitalWrite(BUZZER_PIN, LOW);
 
-    Serial.println("Kasir RFID Siap!");
-    Serial.println("Menunggu pemindaian tag RFID...");
-    Serial.println();
+  // BARU: Inisialisasi printer
+  // mySerial.begin(9600); // Dinonaktifkan sementara
+  // printer.begin();      // Dinonaktifkan sementara
+
+  Serial.println("Kasir RFID Siap!");
+  Serial.println("Menunggu pemindaian tag RFID...");
+  Serial.println();
 }
 
 void loop() {
-    // 1. Cari kartu/tag baru
-    if ( ! rfid.PICC_IsNewCardPresent()) {
-        return; // Jika tidak ada, ulangi loop
-    }
+  // --- BARU: Logika untuk menerima perintah cetak dari PC/Bridge ---
+  // if (Serial.available() > 0) {
+  //   String command = Serial.readStringUntil('\n');
+  //   command.trim();
 
-    // 2. Pilih salah satu kartu (baca serial number)
-    if ( ! rfid.PICC_ReadCardSerial()) {
-        return; // Jika gagal baca, ulangi loop
-    }
+  //   if (command == "PRINT::") {
+  //     // Mode cetak aktif, baca setiap baris sampai ada perintah "ENDPRINT::"
+  //     while (true) {
+  //       if (Serial.available() > 0) {
+  //         String lineToPrint = Serial.readStringUntil('\n');
+  //         if (lineToPrint.startsWith("ENDPRINT::")) break; // Keluar dari mode cetak
+  //         // printer.println(lineToPrint); // Cetak baris ke printer (dinonaktifkan)
+  //       }
+  //     }
+  //     // printer.feed(3); // Beri jarak 3 baris setelah selesai cetak (dinonaktifkan)
+  //   }
+  // }
+
+  // 1. Cari kartu/tag baru
+  if ( ! rfid.PICC_IsNewCardPresent()) {
+    return; // Jika tidak ada, ulangi loop
+  }
+
+  // 2. Pilih salah satu kartu (baca serial number)
+  if ( ! rfid.PICC_ReadCardSerial()) {
+    return; // Jika gagal baca, ulangi loop
+  }
 
   // --- 3. JIKA TAG BERHASIL DIBACA ---
 
   // Dapatkan UID sebagai string dan kirim ke Serial
-    String uidString = "";
-    for (byte i = 0; i < rfid.uid.size; i++) {
-        if (rfid.uid.uidByte[i] < 0x10) {
-        uidString += "0"; // Tambahkan '0' di depan jika nilai hex < 10
-        }
-        uidString += String(rfid.uid.uidByte[i], HEX);
+  String uidString = "";
+  for (byte i = 0; i < rfid.uid.size; i++) {
+    if (rfid.uid.uidByte[i] < 0x10) {
+      uidString += "0"; // Tambahkan '0' di depan jika nilai hex < 10
     }
-    uidString.toUpperCase(); // Ubah ke huruf besar untuk konsistensi
+    uidString += String(rfid.uid.uidByte[i], HEX);
+  }
+  uidString.toUpperCase(); // Ubah ke huruf besar untuk konsistensi
 
-    Serial.println(uidString); // Kirim UID bersih diikuti newline ke rfid-bridge.js
+  Serial.println(uidString); // Kirim UID bersih diikuti newline ke rfid-bridge.js
 
-    // Aktifkan Indikator Sukses (Bip & LED nyala)
-    digitalWrite(LED_PIN, HIGH);
-    digitalWrite(BUZZER_PIN, HIGH);
-    delay(200);
-    digitalWrite(LED_PIN, LOW);
-    digitalWrite(BUZZER_PIN, LOW);
-    
-    // Beri jeda agar tag yang sama tidak terbaca berulang kali dengan cepat
-    delay(800); 
+  // Aktifkan Indikator Sukses (Bip & LED nyala)
+  digitalWrite(LED_PIN, HIGH);
+  digitalWrite(BUZZER_PIN, HIGH);
+  delay(200);
+  digitalWrite(LED_PIN, LOW);
+  digitalWrite(BUZZER_PIN, LOW);
+  
+  // Beri jeda agar tag yang sama tidak terbaca berulang kali dengan cepat
+  delay(800); 
 
-    // Hentikan pembacaan kartu saat ini
-    rfid.PICC_HaltA();
+  // Hentikan pembacaan kartu saat ini
+  rfid.PICC_HaltA();
 }

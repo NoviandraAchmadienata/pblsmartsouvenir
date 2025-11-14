@@ -62,6 +62,22 @@ const wss = new WebSocket.Server({ port: WS_PORT, path: WS_PATH }, () => {
 wss.on('connection', (ws) => {
   console.log('[RFID-BRIDGE] Frontend connected');
   ws.send(JSON.stringify({ type: 'info', message: 'Connected to RFID bridge' }));
+
+  // BARU: Tambahkan listener untuk pesan dari Kiosk
+  ws.on('message', (message) => {
+    try {
+      const data = JSON.parse(message);
+      // Jika Kiosk mengirim perintah cetak
+      if (data.type === 'print' && data.payload) {
+        console.log('\n--- [RFID-BRIDGE] RECEIPT TO PRINT ---');
+        console.log(data.payload);
+        console.log('--------------------------------------\n');
+        // port.write(`PRINT::\n${data.payload}\nENDPRINT::\n`); // Dinonaktifkan sementara
+      }
+    } catch (e) {
+      console.error('[RFID-BRIDGE] Invalid message from client:', e);
+    }
+  });
 });
 
 function broadcast(data) {
