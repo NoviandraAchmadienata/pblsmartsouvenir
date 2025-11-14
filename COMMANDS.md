@@ -4,6 +4,16 @@ File ini berisi kumpulan perintah yang sering digunakan untuk menjalankan, menge
 
 ---
 
+## 0. Instalasi Dependensi
+
+### Dependensi Utama (Server)
+`npm install express cors jsonwebtoken bcryptjs firebase-admin`
+
+### Dependensi untuk RFID Bridge & Simulator
+`npm install ws serialport`
+
+---
+
 ## 1. Menjalankan Aplikasi
 
 ### Menjalankan Server Utama (Backend)

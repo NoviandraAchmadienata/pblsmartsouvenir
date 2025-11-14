@@ -29,12 +29,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 // Redirect ke halaman admin
                 window.location.href = 'admin.html';
             } else {
-                errorDiv.textContent = data.message || 'Login failed.';
+                errorDiv.textContent = data.message || 'Login gagal.';
                 errorDiv.style.display = 'block';
             }
         } catch (error) {
             console.error('Login error:', error);
-            errorDiv.textContent = 'An error occurred. Please try again.';
+            errorDiv.textContent = 'Terjadi kesalahan. Harap coba lagi.';
             errorDiv.style.display = 'block';
         }
     }

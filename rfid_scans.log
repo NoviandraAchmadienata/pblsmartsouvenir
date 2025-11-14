@@ -1,0 +1,6 @@
+2025-11-14T08:23:20.958Z - WebSocket listening on ws://localhost:8080/ws/rfid
+2025-11-14T08:23:20.997Z - ERROR: Serial error: Opening COM3: File not found
+2025-11-14T08:26:48.305Z - WebSocket listening on ws://localhost:8080/ws/rfid
+2025-11-14T08:26:48.368Z - ERROR: Serial error: Opening COM3: File not found
+2025-11-14T08:29:54.942Z - WebSocket listening on ws://localhost:8080/ws/rfid
+2025-11-14T08:29:54.956Z - ERROR: Serial error: Opening COM3: File not found

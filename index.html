@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Self-Service Cashier</title>
+    <title>Kasir Self-Service</title>
     <link rel="stylesheet" href="style.css">
 </head>
 
@@ -13,7 +13,7 @@
         <main class="main-content">
             <div class="shop-header">
                 <h2 class="logo">Smart Souvenir</h2>
-                <span id="realtime-clock">Loading time...</span>
+                <span id="realtime-clock">Memuat waktu...</span>
             </div>
 
             <div class="check-list">
@@ -26,7 +26,7 @@
                 </div>
                 <div class="check-items" id="cart-items">
                     <div class="empty-cart-placeholder">
-                        <p>Silakan pindai item pertama Anda...</p>
+                        <p>Silakan pindai produk pertama Anda...</p>
                     </div>
                 </div>
                 <div class="check-footer">
@@ -37,7 +37,7 @@
         </main>
 
         <aside class="payment-panel">
-            <h3>Joint payment</h3>
+            <h3>Pembayaran</h3>
             <div class="payment-summary">
                 <div class="summary-row">
                     <span>Subtotal</span>
@@ -54,28 +54,28 @@
             </div>
 
             <div id="payment-selection">
-                <button class="pay-btn" id="pay-qris-btn">Pay with QRIS</button>
+                <button class="pay-btn" id="pay-qris-btn">Bayar dengan QRIS</button>
             </div>
 
             <div id="qris-display" class="hidden">
-                <h4>Scan to Pay</h4>
+                <h4>Pindai untuk Membayar</h4>
 
                 <p id="qris-tx-id" class="transaction-id-display"></p>
 
                 <!-- DIKEMBALIKAN: Gunakan <img> untuk menampilkan URL gambar QR -->
                 <img src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=Example" alt="QRIS Code" id="qris-image">
-                <p>Waiting for payment...</p>
-                <button id="simulate-payment-success">Simulate Payment Success</button>
-                <button id="cancel-transaction-btn" class="cancel-btn">Cancel Transaction</button>
+                <p>Menunggu pembayaran...</p>
+                <button id="simulate-payment-success">Simulasikan Pembayaran Berhasil</button>
+                <button id="cancel-transaction-btn" class="cancel-btn">Batalkan Transaksi</button>
             </div>
 
             <div id="payment-success" class="hidden">
-                <h4>Payment Successful!</h4>
+                <h4>Pembayaran Berhasil!</h4>
 
                 <p id="success-tx-id" class="transaction-id-display"></p>
 
-                <p>Please take your receipt.</p>
-                <button id="new-order-btn" class="print-btn">New Order</button>
+                <p>Silakan ambil struk Anda.</p>
+                <button id="new-order-btn" class="print-btn">Pesanan Baru</button>
             </div>
         </aside>
     </div>
@@ -86,8 +86,8 @@
             <svg class="checkmark" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 52 52">
                 <path class="checkmark__check" fill="none" d="M14.1 27.2l7.1 7.2 16.7-16.8"/>
             </svg>
-            <h4 id="kiosk-success-title">Payment Successful!</h4>
-            <p id="kiosk-success-message">Thank you for your purchase.</p>
+            <h4 id="kiosk-success-title">Pembayaran Berhasil!</h4>
+            <p id="kiosk-success-message">Terima kasih atas pembelian Anda.</p>
             <p id="kiosk-success-tx-id" class="transaction-id-display"></p>
         </div>
     </div>

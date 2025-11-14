@@ -4,7 +4,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const token = localStorage.getItem('authToken');
     if (!token) {
         // Jika tidak ada token, paksa kembali ke halaman login
-        window.location.href = 'login.html';
+        window.location.href = 'login.html'; // Tetap bahasa Inggris untuk URL
         return; // Hentikan eksekusi sisa skrip
     }
 
@@ -17,8 +17,8 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- BARU: Logika Logout ---
     const logoutBtn = document.getElementById('logout-btn');
     logoutBtn.addEventListener('click', () => {
-        // Ganti confirm() dengan modal kustom
-        showConfirm('Are you sure you want to logout?', () => {
+        // Ganti confirm() dengan modal kustom (sudah dilakukan)
+        showConfirm('Apakah Anda yakin ingin keluar?', () => {
             localStorage.removeItem('authToken');
             window.location.href = 'login.html';
         });
@@ -138,7 +138,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // === FUNGSI: Muat Produk ===
     async function loadProducts() {
         productDropdown.innerHTML = '<option value="">Loading...</option>';
-        productListDiv.innerHTML = '<p>Loading...</p>';
+        productListDiv.innerHTML = '<p>Memuat...</p>';
         const discountProductSelector = document.getElementById('discount-product-selector');
         discountProductSelector.innerHTML = '<option value="">Loading...</option>';
 
@@ -146,7 +146,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const response = await fetch('http://localhost:3000/api/admin/products', {
                 headers: getAuthHeaders()
             });
-            if (!response.ok) throw new Error('Failed to fetch products');
+            if (!response.ok) throw new Error('Gagal mengambil produk');
             const products = await response.json();
             currentProducts = products; // Simpan produk ke cache
             
@@ -179,7 +179,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     <td>${product.product_id}</td>
                     <td>${product.name}</td>
                     <td>Rp ${product.price.toFixed(2)}</td>
-                    <td class="product-actions">
+                    <td class="product-actions"> 
                         <button class="register-tag-product-btn" data-product-id="${product.product_id}" data-product-name="${product.name}">Register Tag</button>
                         <button class="edit-product-btn" data-product-id="${product.product_id}">Edit</button>
                         <button class="delete-product-btn" data-product-id="${product.product_id}">Hapus</button>
@@ -190,10 +190,10 @@ document.addEventListener('DOMContentLoaded', () => {
             addRegisterTagProductListeners(); // Panggil listener untuk tombol register tag
             addEditProductListeners(); // Panggil listener untuk tombol edit
         } catch (error) {
-            console.error('Failed to load products:', error);
-            productDropdown.innerHTML = '<option value="">Error loading</option>';
-            discountProductSelector.innerHTML = '<option value="">Error loading</option>';
-            productListDiv.innerHTML = '<p style="color: red;">Error loading products.</p>';
+            console.error('Gagal memuat produk:', error);
+            productDropdown.innerHTML = '<option value="">Gagal memuat</option>';
+            discountProductSelector.innerHTML = '<option value="">Gagal memuat</option>';
+            productListDiv.innerHTML = '<p style="color: red;">Terjadi kesalahan saat memuat produk.</p>';
         }
     }
     
@@ -231,7 +231,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     async function handleDeleteProduct(event) {
         const productId = event.target.getAttribute('data-product-id');
-        showConfirm(`Are you sure you want to delete product ID ${productId}? This cannot be undone.`, async () => {
+        showConfirm(`Apakah Anda yakin ingin menghapus produk ID ${productId}? Tindakan ini tidak dapat dibatalkan.`, async () => {
             try {
                 const response = await fetch(`http://localhost:3000/api/admin/products/define/${productId}`, {
                     method: 'DELETE',
@@ -239,7 +239,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 });
                 if (!response.ok) {
                     const err = await response.json();
-                    throw new Error(err.error || 'Failed to delete product');
+                    throw new Error(err.error || 'Gagal menghapus produk');
                 }
                 showAlert('Product deleted successfully.');
                 loadProducts(); // Reload list
@@ -268,7 +268,7 @@ document.addEventListener('DOMContentLoaded', () => {
             document.getElementById('edit-product-price').value = product.price;
             editModal.classList.remove('hidden');
         } else {
-            showAlert('Product data not found. Please refresh.');
+            showAlert('Data produk tidak ditemukan. Harap segarkan.');
         }
     }
 
@@ -289,21 +289,21 @@ document.addEventListener('DOMContentLoaded', () => {
         const price = parseFloat(document.getElementById('edit-product-price').value);
 
         if (!name || isNaN(price) || price < 0) {
-            showAlert('Please provide a valid name and price.');
+            showAlert('Harap berikan nama dan harga yang valid.');
             return;
         }
 
         try {
             const response = await fetch(`http://localhost:3000/api/admin/products/define/${id}`, {
                 method: 'PUT',
-                headers: getAuthHeaders(),
+                headers: getAuthHeaders(), 
                 body: JSON.stringify({ name, price })
             });
             if (!response.ok) {
                 const err = await response.json();
-                throw new Error(err.error || 'Failed to update product');
+                throw new Error(err.error || 'Gagal memperbarui produk');
             }
-            showAlert('Product updated successfully!');
+            showAlert('Produk berhasil diperbarui!');
             closeEditModal();
             loadProducts(); // Muat ulang daftar produk
         } catch (error) {
@@ -353,7 +353,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const statusBox = document.getElementById('register-modal-status');
 
         if (!uid) {
-            statusBox.innerHTML = `<p class="status-error">UID cannot be empty.</p>`;
+            statusBox.innerHTML = `<p class="status-error">UID tidak boleh kosong.</p>`;
             return;
         }
 
@@ -363,10 +363,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 headers: getAuthHeaders(),
                 body: JSON.stringify({ product_id: parseInt(productId), uid: uid })
             });
-            const result = await response.json();
-            if (!response.ok) throw new Error(result.error || 'Failed to register tag');
+            const result = await response.json(); 
+            if (!response.ok) throw new Error(result.error || 'Gagal mendaftarkan tag');
 
-            statusBox.innerHTML = `<p class="status-success">✓ Tag ${uid} registered successfully!</p>`;
+            statusBox.innerHTML = `<p class="status-success">✓ Tag ${uid} berhasil didaftarkan!</p>`;
             uidInput.value = ''; // Kosongkan untuk scan berikutnya
             uidInput.focus(); // Tetap fokus di input
         } catch (error) {
@@ -417,19 +417,19 @@ document.addEventListener('DOMContentLoaded', () => {
         const product_id = document.getElementById('prod-select-dropdown').value;
         const uid = document.getElementById('prod-uid').value;
         if (!product_id || !uid) {
-            showAlert('Please select a product AND scan an RFID tag.');
+            showAlert('Harap pilih produk DAN pindai tag RFID.');
             return;
         }
 
         registerBtn.disabled = true; // Nonaktifkan tombol
-        registerBtn.textContent = 'Registering...';
+        registerBtn.textContent = 'Mendaftarkan...';
         try {
             const response = await fetch('http://localhost:3000/api/admin/rfid/register', { 
                 method: 'POST',
                 headers: getAuthHeaders(),
                 body: JSON.stringify({ product_id: parseInt(product_id), uid: uid })
             });
-            if (!response.ok) {
+            if (!response.ok) { 
                 const err = await response.json();
                 throw new Error(err.error || 'Gagal mendaftarkan tag');
             }
@@ -441,13 +441,13 @@ document.addEventListener('DOMContentLoaded', () => {
             showAlert(`Error: ${error.message}.`);
         } finally {
             registerBtn.disabled = false; // Aktifkan kembali tombol
-            registerBtn.textContent = 'Register Tag';
+            registerBtn.textContent = 'Daftarkan Tag';
         }
     });
 
     // === FUNGSI BARU: Muat Inventaris ===
     async function loadInventory() {
-        inventoryListContainer.innerHTML = '<p>Loading inventory data...</p>';
+        inventoryListContainer.innerHTML = '<p>Memuat data inventaris...</p>';
         const thresholdInput = document.getElementById('low-stock-threshold');
 
         // Ambil dan tampilkan pengaturan saat ini
@@ -455,7 +455,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const settingsResponse = await fetch('http://localhost:3000/api/admin/settings', { headers: getAuthHeaders() });
             if (!settingsResponse.ok) throw new Error('Failed to fetch settings');
             const settings = await settingsResponse.json();
-            thresholdInput.value = settings.lowStockThreshold;
+            thresholdInput.value = settings.lowStockThreshold; 
         } catch (error) {
             console.error('Failed to load settings:', error);
             // Jangan hentikan proses, lanjutkan dengan nilai default atau kosong
@@ -474,11 +474,11 @@ document.addEventListener('DOMContentLoaded', () => {
             inventoryListContainer.innerHTML = `
                 <table id="inventory-table">
                     <thead>
-                        <tr>
-                            <th>Product ID</th>
-                            <th>Product Name</th>
-                            <th>Active Stock</th>
-                            <th>Deactivated Tags</th>
+                        <tr> 
+                            <th>ID Produk</th>
+                            <th>Nama Produk</th>
+                            <th>Stok Aktif</th>
+                            <th>Tag Dinonaktifkan</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -487,8 +487,8 @@ document.addEventListener('DOMContentLoaded', () => {
             `;
             const inventoryTableBody = inventoryListContainer.querySelector('tbody');
 
-            if (inventory.length === 0) {
-                inventoryTableBody.innerHTML = '<tr><td colspan="4">No inventory found.</td></tr>';
+            if (inventory.length === 0) { 
+                inventoryTableBody.innerHTML = '<tr><td colspan="4">Tidak ada inventaris ditemukan.</td></tr>';
                 return;
             }
 
@@ -502,8 +502,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 row.setAttribute('data-product-id', item.product_id);
                 row.setAttribute('data-product-name', item.name);
                 row.innerHTML = `
-                    <td>${item.product_id}</td>
-                    <td>${item.name}</td>
+                    <td>${item.product_id}</td> 
+                    <td>${item.name}</td> 
                     <td><strong>${item.stock}</strong> pcs</td>
                     <td>${item.deactivatedStock} pcs</td>
                 `;
@@ -514,7 +514,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         } catch (error) {
             console.error('Failed to load inventory:', error);
-            inventoryListContainer.innerHTML = `<p style="color: red;">Error: ${error.message}</p>`;
+            inventoryListContainer.innerHTML = `<p style="color: red;">Error: ${error.message}</p>`; // Tetap Error
         }
     }
 
@@ -524,7 +524,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const newThreshold = parseInt(thresholdInput.value, 10);
 
         if (isNaN(newThreshold) || newThreshold < 0) {
-            showAlert('Please enter a valid non-negative number for the threshold.');
+            showAlert('Harap masukkan angka non-negatif yang valid untuk ambang batas.');
             return;
         }
 
@@ -535,7 +535,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 body: JSON.stringify({ lowStockThreshold: newThreshold })
             });
             const result = await response.json();
-            if (!response.ok) throw new Error(result.error || 'Failed to save settings');
+            if (!response.ok) throw new Error(result.error || 'Gagal menyimpan pengaturan');
             showAlert(result.message);
             loadInventory(); // Muat ulang inventaris untuk menerapkan sorotan baru
         } catch (error) {
@@ -573,14 +573,14 @@ document.addEventListener('DOMContentLoaded', () => {
             const response = await fetch(`http://localhost:3000/api/admin/rfid/reactivate/${uid}`, { method: 'PUT', headers: getAuthHeaders() });
             const result = await response.json();
             if (!response.ok) throw new Error(result.error || 'Failed to reactivate tag');
-            showAlert(result.message);
+            showAlert(result.message); 
             refreshInventoryAndModal();
         } catch (error) {
             showAlert(`Error: ${error.message}`);
         }
     }
 
-    // --- FUNGSI BARU: Logika untuk menghapus tag permanen ---
+    // --- FUNGSI BARU: Logika untuk menghapus tag secara permanen ---
     async function handleDeleteTag(event) {
         const uid = event.target.dataset.uid;
         showConfirm(`Are you sure you want to permanently delete tag ${uid}? This cannot be undone.`, async () => {
@@ -593,16 +593,16 @@ document.addEventListener('DOMContentLoaded', () => {
     async function handleDeactivateTag(event) {
         const uid = event.target.dataset.uid;
         
-        // Ganti confirm() dengan modal kustom
-        showConfirm(`Are you sure you want to deactivate RFID tag ${uid}? This action cannot be undone.`, async () => {
+        // Ganti confirm() dengan modal kustom (sudah dilakukan)
+        showConfirm(`Apakah Anda yakin ingin menonaktifkan tag RFID ${uid}? Tindakan ini tidak dapat dibatalkan.`, async () => {
             // Logika ini hanya akan berjalan jika admin menekan "Confirm"
             try {
                 const response = await fetch(`http://localhost:3000/api/admin/rfid/deactivate/${uid}`, {
                     method: 'PUT',
                     headers: getAuthHeaders()
                 });
-                const result = await response.json();
-                if (!response.ok) throw new Error(result.error || 'Failed to deactivate tag');
+                const result = await response.json(); 
+                if (!response.ok) throw new Error(result.error || 'Gagal menonaktifkan tag');
                 
                 showAlert(result.message);
                 refreshInventoryAndModal();
@@ -629,14 +629,14 @@ document.addEventListener('DOMContentLoaded', () => {
     // === FUNGSI BARU: Tampilkan Modal Detail UID ===
     async function showUidDetails(productId, productName, highlightUid = null) {
         modalProductName.textContent = productName;
-        modalUidList.innerHTML = '<p>Loading UIDs...</p>';
+        modalUidList.innerHTML = '<p>Memuat UID...</p>';
         modalOverlay.classList.remove('hidden'); // Tampilkan modal
 
         try {
             const response = await fetch(`http://localhost:3000/api/admin/inventory/details/${productId}`, {
                 headers: getAuthHeaders()
             });
-            if (!response.ok) throw new Error('Failed to fetch UID details');
+            if (!response.ok) throw new Error('Gagal mengambil detail UID');
             const tags = await response.json(); // Sekarang array of objects {uid, status}
 
             modalUidList.innerHTML = ''; // Kosongkan
@@ -657,11 +657,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 let actionButtons = '';
                 if (tag.status === 'active') {
-                    actionButtons = `<button class="deactivate-tag-btn" data-uid="${tag.uid}">Deactivate</button>`;
+                    actionButtons = `<button class="deactivate-tag-btn" data-uid="${tag.uid}">Nonaktifkan</button>`;
                 } else if (tag.status === 'deactivated') {
                     actionButtons = `
-                        <button class="reactivate-tag-btn" data-uid="${tag.uid}">Reactivate</button>
-                        <button class="delete-tag-btn" data-uid="${tag.uid}">Delete</button>
+                        <button class="reactivate-tag-btn" data-uid="${tag.uid}">Aktifkan Kembali</button>
+                        <button class="delete-tag-btn" data-uid="${tag.uid}">Hapus</button>
                     `;
                 } else { // sold
                     actionButtons = `<span>-</span>`;
@@ -707,7 +707,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         } catch (error) {
             console.error('Failed to load UID details:', error);
-            modalUidList.innerHTML = `<p style="color: red;">Error: ${error.message}</p>`;
+            modalUidList.innerHTML = `<p style="color: red;">Error: ${error.message}</p>`; // Tetap Error
         }
     }
 
@@ -740,10 +740,10 @@ document.addEventListener('DOMContentLoaded', () => {
             const response = await fetch(`http://localhost:3000/api/admin/tag-details/${searchTerm}`, { headers: getAuthHeaders() });
             const data = await response.json();
             if (!response.ok) throw new Error(data.error || 'Tag not found.');
-            
+            // Tetap gunakan searchTerm untuk highlight
             showUidDetails(data.productId, data.productName, searchTerm);
             } catch (error) {
-                showAlert(`No product name matched '${searchTerm}', and it was not found as a UID.`);
+                showAlert(`Tidak ada nama produk yang cocok dengan '${searchTerm}', dan tidak ditemukan sebagai UID.`);
             }
         }
     }
@@ -778,14 +778,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
     document.getElementById('get-report-btn').addEventListener('click', async () => {
         const period = document.getElementById('report-period').value;
-        const resultsDiv = document.getElementById('report-results');
+        const resultsDiv = document.getElementById('report-results'); 
         resultsDiv.innerHTML = '<p>Loading report...</p>';
         let queryParams = `?period=${period}`;
         if (period === 'custom') {
             const startDate = document.getElementById('start-date').value;
             const endDate = document.getElementById('end-date').value;
-            if (!startDate || !endDate) {
-                showAlert('Please select both start and end dates for custom range.');
+            if (!startDate || !endDate) { 
+                showAlert('Harap pilih tanggal mulai dan tanggal akhir untuk rentang kustom.');
                 resultsDiv.innerHTML = '';
                 return;
             }
@@ -795,11 +795,11 @@ document.addEventListener('DOMContentLoaded', () => {
             const response = await fetch(`http://localhost:3000/api/admin/reports${queryParams}`, {
                 headers: getAuthHeaders()
             });
-            if (!response.ok) {
-                throw new Error(`Failed to fetch report: ${response.statusText}`);
+            if (!response.ok) { 
+                throw new Error(`Gagal mengambil laporan: ${response.statusText}`);
             }
             const data = await response.json();
-            displayReport(data);
+            displayReport(data); 
         } catch (error) {
             console.error('Failed to get report:', error);
             if (error.message.includes('401') || error.message.includes('403')) {
@@ -814,14 +814,14 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- FUNGSI BARU: Ekspor Laporan ke CSV ---
     function exportReportToCSV(data) {
         if (!data || !data.transactions || data.transactions.length === 0) { 
-            alert('No data available to export.');
+            alert('Tidak ada data yang tersedia untuk diekspor.');
             return;
         }
 
         const headers = [
-            "Transaction ID",
-            "Date & Time",
-            "Original Price (IDR)",
+            "ID Transaksi",
+            "Tanggal & Waktu",
+            "Harga Asli (IDR)",
             "Discount (IDR)",
             "Total Amount (IDR)",
             "Payment Status",
@@ -880,36 +880,36 @@ document.addEventListener('DOMContentLoaded', () => {
     function displayReport(data) {
         const resultsDiv = document.getElementById('report-results');
         const formatter = new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 2 });
-        const formatDate = (dateString) => new Date(dateString).toLocaleString('id-ID', {
+        const formatDate = (dateString) => new Date(dateString).toLocaleString('id-ID', { 
             dateStyle: 'medium',
             timeStyle: 'short'
         });
         let summaryHtml = `
-            <h3>Report Summary (Period: ${data.period})</h3>
+            <h3>Ringkasan Laporan (Periode: ${data.period})</h3>
             <div id="report-summary">
-                <p>Total Original Price: <strong>${formatter.format(data.summary.totalSubtotal)}</strong></p>                
-                <p>Total Discount Given: <strong>${formatter.format(data.summary.totalDiscount)}</strong></p>
-                <p>Total Sales: <strong>${formatter.format(data.summary.totalSales)}</strong></p>
-                <p>Total Transactions: <strong>${data.summary.totalTransactions}</strong></p>
+                <p>Total Harga Asli: <strong>${formatter.format(data.summary.totalSubtotal)}</strong></p>                
+                <p>Total Diskon Diberikan: <strong>${formatter.format(data.summary.totalDiscount)}</strong></p>
+                <p>Total Penjualan: <strong>${formatter.format(data.summary.totalSales)}</strong></p>
+                <p>Total Transaksi: <strong>${data.summary.totalTransactions}</strong></p>
             </div>
         `;
 
         // Tambahkan tombol Export setelah summary
-        const exportButtonHtml = `<button id="export-csv-btn" class="export-btn">Export to CSV</button>`;
+        const exportButtonHtml = `<button id="export-csv-btn" class="export-btn">Ekspor ke CSV</button>`;
 
         let tableHtml = `
-            <h3>Transaction History</h3>
+            <h3>Riwayat Transaksi</h3>
             <table>
                 <thead>
                     <tr>
-                        <th>Transaction ID</th>
-                        <th>Date & Time</th>
-                        <th>Total Amount</th>
-                        <th>Original Price</th>
-                        <th>Discount</th>
-                        <th>Payment Status</th>
-                        <th>Items</th>
-                        <th>Products Sold</th>
+                        <th>ID Transaksi</th>
+                        <th>Tanggal & Waktu</th>
+                        <th>Jumlah Total</th>
+                        <th>Harga Asli</th>
+                        <th>Diskon</th>
+                        <th>Status Pembayaran</th>
+                        <th>Item</th>
+                        <th>Produk Terjual</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -945,17 +945,17 @@ document.addEventListener('DOMContentLoaded', () => {
     // === FUNGSI BARU: KELOLA HALAMAN DISKON ===
     async function loadDiscountsPage() {
         const container = document.getElementById('existing-discounts-list');
-        container.innerHTML = '<p>Loading discount rules...</p>';
+        container.innerHTML = '<p>Memuat aturan diskon...</p>';
 
         // Perbaikan: Muat produk ke dropdown setiap kali halaman diskon dibuka
         const discountProductSelector = document.getElementById('discount-product-selector');
-        discountProductSelector.innerHTML = '<option value="">Loading products...</option>';
+        discountProductSelector.innerHTML = '<option value="">Memuat produk...</option>';
         try {
             // Perbaikan: Tambahkan header otentikasi untuk mengambil produk
             const productsResponse = await fetch('http://localhost:3000/api/admin/products', {
                 headers: getAuthHeaders()
             });
-            if (!productsResponse.ok) throw new Error('Failed to fetch products');
+            if (!productsResponse.ok) throw new Error('Gagal mengambil produk');
 
             const products = await productsResponse.json();
             discountProductSelector.innerHTML = ''; // Kosongkan sebelum mengisi
@@ -963,9 +963,9 @@ document.addEventListener('DOMContentLoaded', () => {
             products.forEach(p => {
                 discountProductSelector.add(new Option(`${p.name} (ID: ${p.product_id})`, p.product_id));
             });
-        } catch (error) {
-            console.error('Failed to load products for discount form:', error);
-            discountProductSelector.innerHTML = '<option value="">Error loading products</option>';
+        } catch (error) { 
+            console.error('Gagal memuat produk untuk formulir diskon:', error);
+            discountProductSelector.innerHTML = '<option value="">Gagal memuat produk</option>';
         }
 
         // Muat aturan diskon yang ada
@@ -976,15 +976,15 @@ document.addEventListener('DOMContentLoaded', () => {
             const discounts = await response.json();
             displayDiscountRules(discounts);
         } catch (error) {
-            container.innerHTML = '<p style="color: red;">Failed to load discount rules.</p>';
+            container.innerHTML = '<p style="color: red;">Gagal memuat aturan diskon.</p>';
             console.error(error);
         }
     }
 
     function displayDiscountRules(discounts) {
         const container = document.getElementById('existing-discounts-list');
-        if (discounts.length === 0) {
-            container.innerHTML = '<p>No discount rules created yet.</p>';
+        if (discounts.length === 0) { 
+            container.innerHTML = '<p>Belum ada aturan diskon yang dibuat.</p>';
             return;
         }
         let tableHtml = `
@@ -992,15 +992,15 @@ document.addEventListener('DOMContentLoaded', () => {
                 <thead>
                     <tr>
                         <th>Name</th><th>%</th><th>Type</th><th>Target</th><th>Period</th><th>Status</th><th>Action</th>
-                    </tr>
+                    </tr> 
                 </thead>
                 <tbody>`;
         discounts.forEach(d => {
-            const target = d.targetType === 'product' ? `Product ID: ${d.targetId}` : 'Global';
-            const period = d.startDate && d.endDate ? `${d.startDate} to ${d.endDate}` : 'Always Active';
+            const target = d.targetType === 'product' ? `ID Produk: ${d.targetId}` : 'Global';
+            const period = d.startDate && d.endDate ? `${d.startDate} hingga ${d.endDate}` : 'Selalu Aktif';
             const statusClass = d.isActive ? 'status-active' : 'status-inactive';
-            const statusText = d.isActive ? 'Active' : 'Inactive';
-            const toggleButtonText = d.isActive ? 'Deactivate' : 'Activate';
+            const statusText = d.isActive ? 'Aktif' : 'Tidak Aktif';
+            const toggleButtonText = d.isActive ? 'Nonaktifkan' : 'Aktifkan';
             const toggleButtonClass = d.isActive ? 'toggle-btn-deactivate' : 'toggle-btn-activate';
 
             tableHtml += `
@@ -1012,7 +1012,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     <td>${period}</td>
                     <td><span class="status-badge ${statusClass}">${statusText}</span></td>
                     <td>
-                        <button class="toggle-discount-btn ${toggleButtonClass}" data-discount-id="${d.id}">${toggleButtonText}</button>
+                        <button class="toggle-discount-btn ${toggleButtonClass}" data-discount-id="${d.id}">${toggleButtonText}</button> 
                         <button class="delete-discount-btn" data-discount-id="${d.id}">Delete</button>
                     </td>
                 </tr>`;
@@ -1030,7 +1030,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             method: 'DELETE',
                             headers: getAuthHeaders()
                         });
-                        loadDiscountsPage(); // Reload
+                        loadDiscountsPage(); // Muat ulang
                     } catch (error) {
                         showAlert('Failed to delete discount rule.');
                     }
@@ -1046,7 +1046,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     method: 'PUT',
                     headers: getAuthHeaders()
                 });
-                loadDiscountsPage(); // Muat ulang
+                loadDiscountsPage(); // Muat ulang 
             });
         });
     }
@@ -1071,17 +1071,17 @@ document.addEventListener('DOMContentLoaded', () => {
         };
 
         if (!rule.name || isNaN(rule.percentage)) {
-            showAlert('Please fill in discount name and percentage.');
+            showAlert('Harap isi nama dan persentase diskon.');
             return;
         }
 
         try {
             await fetch('http://localhost:3000/api/admin/discounts', {
                 method: 'POST',
-                headers: getAuthHeaders(),
+                headers: getAuthHeaders(), 
                 body: JSON.stringify(rule)
             });
-            showAlert('Discount rule created successfully!');
+            showAlert('Aturan diskon berhasil dibuat!');
             loadDiscountsPage(); // Muat ulang
         } catch (error) {
             showAlert('Failed to create discount rule.');
