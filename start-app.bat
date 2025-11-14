@@ -12,19 +12,21 @@ cd /d %~dp0
 title Smart Souvenir Starter
 
 echo.
-latorecho [1/5] Memulai Backend Server...
+echo [1/5] Memastikan semua dependensi proyek terinstal (npm install)...
+call npm install
+
+echo.
+echo [2/5] Memulai Backend Server...
 REM Memulai server.js di jendela terminal baru
 start "Backend Server" node backend/server.js
 
-echo [2/5] Memulai RFID Bridge...
+echo [3/5] Memulai RFID Bridge Simulator...
 REM Memulai rfid-bridge.js di jendela terminal baru
 start "RFID Bridge" node backend/rfid-bridge/rfid-bridge-simulator.js
 
-echo [3/5] Mengonfigurasi Ngrok Authtoken...
+echo [4/5] Memulai Ngrok untuk Webhook...
 REM Perintah ini menyimpan token Anda. Cukup jalankan sekali, tapi aman dijalankan berulang kali.
 ngrok config add-authtoken 35PgPW3FlZ2QDRILmeGbtiKD9fg_3tYX3ttuDjuFygE82Kr9P
-
-echo [4/5] Memulai Ngrok untuk Webhook...
 REM Memulai ngrok di jendela baru. Pastikan ngrok sudah terinstal dan ada di PATH.
 start "Ngrok" ngrok http 3000
 
@@ -39,8 +41,6 @@ start "" "frontend\kiosk\index.html"
 echo.
 echo =================================================
 echo == SEMUA PROGRAM TELAH DIMULAI.                ==
-echo == PASTIKAN URL NGROK SUDAH DI-SET DI MIDTRANS.==
-echo == Jendela ini bisa ditutup.                   ==
+echo == Jendela ini akan tertutup otomatis...       ==
 echo =================================================
-echo.
-pause
+timeout /t 3 > nul

@@ -4,17 +4,27 @@ File ini berisi kumpulan perintah yang sering digunakan untuk menjalankan, menge
 
 ---
 
-## 0. Instalasi Dependensi
+## Langkah 0: Instalasi Awal (Hanya perlu dilakukan sekali)
 
-### Dependensi Utama (Server)
-`npm install express cors jsonwebtoken bcryptjs firebase-admin`
+Sebelum menjalankan proyek, pastikan perangkat lunak berikut sudah terinstal di komputer Anda.
 
-### Dependensi untuk RFID Bridge & Simulator
-`npm install ws serialport`
+1.  **Install Node.js**:
+    -   Unduh versi **LTS** dari https://nodejs.org/
+    -   Jalankan installer dan ikuti langkah-langkahnya. Pastikan opsi "Add to PATH" dicentang.
+
+2.  **Install Ngrok**:
+    -   Buat akun dan unduh ngrok dari https://dashboard.ngrok.com/get-started/setup
+    -   Ekstrak file `.zip` dan letakkan `ngrok.exe` di lokasi yang mudah diakses (misalnya, `C:\ngrok`).
+    -   Tambahkan folder tersebut ke dalam system PATH agar perintah `ngrok` bisa dijalankan dari mana saja.
 
 ---
 
-## 1. Menjalankan Aplikasi
+## Langkah 1: Instalasi Dependensi Proyek
+
+Cukup jalankan perintah ini di folder utama proyek. Perintah ini akan menginstal semua yang dibutuhkan (server, bridge, dll.) berdasarkan file `package.json`.
+`npm install`
+
+## Langkah 2: Menjalankan Aplikasi
 
 ### Menjalankan Server Utama (Backend)
 Perintah ini memulai server API yang menangani semua logika bisnis. Jalankan dari folder `backend/`.
@@ -30,7 +40,7 @@ node rfid-bridge.js
 
 ---
 
-## 2. Manajemen Database (Firebase)
+## Langkah Tambahan: Manajemen Database (Firebase)
 
 ### Mengisi Database dengan Data Awal (Seeding)
 Jalankan ini jika Anda ingin me-reset database ke kondisi awal atau saat pertama kali setup.
@@ -40,7 +50,7 @@ node seed.js
 
 ---
 
-## 3. Manajemen Proses Latar Belakang (PM2)
+## Opsional: Manajemen Proses Latar Belakang (PM2)
 
 PM2 digunakan untuk menjalankan `rfid-bridge.js` secara otomatis dan stabil di latar belakang.
 
@@ -64,7 +74,7 @@ PM2 digunakan untuk menjalankan `rfid-bridge.js` secara otomatis dan stabil di l
 
 ---
 
-## 4. Konfigurasi Startup di Windows
+## Opsional: Konfigurasi Startup di Windows (dengan PM2)
 
 Perintah ini hanya perlu dijalankan sekali di **PowerShell (sebagai Administrator)**.
 
