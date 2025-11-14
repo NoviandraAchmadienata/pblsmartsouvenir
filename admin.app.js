@@ -14,6 +14,43 @@ document.addEventListener('DOMContentLoaded', () => {
         'Authorization': `Bearer ${token}`
     });
 
+    // === BARU: KONEKSI WEBSOCKET UNTUK ADMIN PANEL ===
+    function setupAdminRfidWebSocket() {
+        const WS_URL = 'ws://localhost:8080/ws/rfid';
+
+        function connect() {
+            console.log('[ADMIN] Connecting to RFID WebSocket...');
+            const ws = new WebSocket(WS_URL);
+
+            ws.onopen = () => console.log('[ADMIN] RFID WebSocket connected');
+            ws.onclose = () => setTimeout(connect, 3000); // Coba sambung lagi setelah 3 detik
+            ws.onerror = (err) => console.error('[ADMIN] RFID WebSocket error:', err);
+
+            ws.onmessage = (event) => {
+                try {
+                    const data = JSON.parse(event.data);
+                    if (data.type === 'rfid' && data.rfid) {
+                        console.log('[ADMIN] RFID tag received:', data.rfid);
+
+                        // Cek apakah modal registrasi tag sedang terbuka
+                        const registerModal = document.getElementById('register-tag-modal');
+                        if (!registerModal.classList.contains('hidden')) {
+                            const uidInput = document.getElementById('register-modal-uid');
+                            const registerButton = document.getElementById('register-modal-btn');
+
+                            // Isi input dan klik tombol register secara otomatis
+                            uidInput.value = data.rfid;
+                            registerButton.click();
+                        }
+                    }
+                } catch (e) {
+                    console.error('[ADMIN] Invalid WS message:', e);
+                }
+            };
+        }
+        connect();
+    }
+
     // --- BARU: Logika Logout ---
     const logoutBtn = document.getElementById('logout-btn');
     logoutBtn.addEventListener('click', () => {
@@ -1091,5 +1128,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Picu klik otomatis saat halaman dimuat
     document.getElementById('get-report-btn').click();
+
+    // === BARU: Mulai koneksi WebSocket untuk admin panel ===
+    setupAdminRfidWebSocket();
 
 });
