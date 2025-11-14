@@ -1,4 +1,4 @@
-# Daftar Perintah Penting
+# Daftar Perintah Penting (Setelah Reorganisasi Folder)
 
 File ini berisi kumpulan perintah yang sering digunakan untuk menjalankan, mengelola, dan men-debug proyek Smart Souvenir.
 
@@ -17,9 +17,9 @@ File ini berisi kumpulan perintah yang sering digunakan untuk menjalankan, menge
 ## 1. Menjalankan Aplikasi
 
 ### Menjalankan Server Utama (Backend)
-Perintah ini memulai server API yang menangani semua logika bisnis, dari transaksi hingga manajemen admin.
+Perintah ini memulai server API yang menangani semua logika bisnis. Jalankan dari folder `backend/`.
 ```bash
-node server.js
+node backend/server.js
 ```
 
 ### Menjalankan Jembatan RFID (RFID Bridge)

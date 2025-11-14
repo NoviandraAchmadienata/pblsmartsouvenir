@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kasir Self-Service</title> 
+    <link rel="stylesheet" href="style.css"> 
+</head>
+
+<body>
+    <div class="kiosk-wrapper">
+        <main class="main-content">
+            <div class="shop-header">
+                <h2 class="logo">Smart Souvenir</h2>
+                <span id="realtime-clock">Memuat waktu...</span>
+            </div>
+
+            <div class="check-list">
+                <div class="check-header">
+                    <span class="col-item">Item</span>
+                    <span class="col-price">Price</span>
+                    <span class="col-qty">Qty</span>
+                    <span class="col-subtotal">Subtotal</span>
+                    <span class="col-action"></span>
+                </div>
+                <div class="check-items" id="cart-items">
+                    <div class="empty-cart-placeholder">
+                        <p>Silakan pindai produk pertama Anda...</p>
+                    </div>
+                </div>
+                <div class="check-footer">
+                    <span>Total items: <span id="total-items-count">0</span></span>
+                    <span class="total-price" id="total-price-display">Rp 0.00</span>
+                </div>
+            </div>
+        </main>
+
+        <aside class="payment-panel">
+            <h3>Pembayaran</h3>
+            <div class="payment-summary">
+                <div class="summary-row">
+                    <span>Subtotal</span>
+                    <span id="summary-subtotal">Rp 0.00</span>
+                </div>
+                <div class="summary-row">
+                    <span>Discounts</span>
+                    <span id="summary-discount">Rp 0.00</span>
+                </div>
+                <div class="summary-total">
+                    <span>Total</span>
+                    <span id="summary-total">Rp 0.00</span>
+                </div>
+            </div>
+
+            <div id="payment-selection">
+                <button class="pay-btn" id="pay-qris-btn">Bayar dengan QRIS</button>
+            </div>
+
+            <div id="qris-display" class="hidden">
+                <h4>Pindai untuk Membayar</h4>
+
+                <p id="qris-tx-id" class="transaction-id-display"></p>
+
+                <!-- DIKEMBALIKAN: Gunakan <img> untuk menampilkan URL gambar QR -->
+                <img src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=Example" alt="QRIS Code" id="qris-image">
+                <p>Menunggu pembayaran...</p>
+                <button id="simulate-payment-success">Simulasikan Pembayaran Berhasil</button>
+                <button id="cancel-transaction-btn" class="cancel-btn">Batalkan Transaksi</button>
+            </div>
+
+            <div id="payment-success" class="hidden">
+                <h4>Pembayaran Berhasil!</h4>
+
+                <p id="success-tx-id" class="transaction-id-display"></p>
+
+                <p>Silakan ambil struk Anda.</p>
+                <button id="new-order-btn" class="print-btn">Pesanan Baru</button>
+            </div>
+        </aside>
+    </div>
+
+    <!-- MODAL PEMBAYARAN SUKSES BARU -->
+    <div id="kiosk-success-modal" class="kiosk-modal-overlay hidden">
+        <div class="kiosk-modal-content success-modal-content">
+            <svg class="checkmark" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 52 52">
+                <path class="checkmark__check" fill="none" d="M14.1 27.2l7.1 7.2 16.7-16.8"/>
+            </svg>
+            <h4 id="kiosk-success-title">Pembayaran Berhasil!</h4>
+            <p id="kiosk-success-message">Terima kasih atas pembelian Anda.</p>
+            <p id="kiosk-success-tx-id" class="transaction-id-display"></p>
+        </div>
+    </div>
+
+    <!-- MODAL ALERT KUSTOM BARU UNTUK KIOSK -->
+    <div id="kiosk-alert-modal" class="kiosk-modal-overlay hidden">
+        <div class="kiosk-modal-content">
+            <p id="kiosk-alert-message"></p>
+            <button id="kiosk-alert-close-btn">OK</button>
+        </div>
+    </div>
+
+    <!-- DIHAPUS: Library QR Code tidak lagi diperlukan -->
+    <script src="app.js"></script> 
+</body>
+
+</html>

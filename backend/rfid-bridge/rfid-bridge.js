@@ -5,7 +5,7 @@ const { SerialPort } = require('serialport');
 const { ReadlineParser } = require('@serialport/parser-readline');
 const WebSocket = require('ws');
 const fs = require('fs'); // BARU: Modul untuk interaksi file
-const path = require('path'); // BARU: Modul untuk menangani path file
+const path = require('path'); // Modul untuk menangani path file
 
 // === GANTI SESUAI LAPTOP KAMU ===
 // Windows biasanya: 'COM3', 'COM4', dll
@@ -18,7 +18,7 @@ const WS_PORT = 8080;
 const WS_PATH = '/ws/rfid';
 
 // --- BARU: Konfigurasi Logging ---
-const LOG_FILE_PATH = path.join(__dirname, 'rfid_scans.log');
+const LOG_FILE_PATH = path.join(__dirname, '../../logs/rfid_scans.log'); // Path relatif ke folder logs
 
 /**
  * Menulis pesan log ke file dengan timestamp.
