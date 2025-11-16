@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kasir Self-Service</title>
+    <!-- BARU: Script Midtrans Snap. Ganti 'data-client-key' dengan Client Key Anda -->
+    <script type="text/javascript" src="https://app.sandbox.midtrans.com/snap/snap.js" data-client-key="Mid-client-78vkOQH-Z-1W_t3b"></script>
+    <link rel="stylesheet" href="style.css"> 
+</head>
+
+<body>
+    <div class="kiosk-wrapper">
+        <main class="main-content">
+            <div class="shop-header">
+                <h2 class="logo">Smart Souvenir</h2>
+                <span id="realtime-clock">Memuat waktu...</span>
+            </div>
+
+            <div class="check-list">
+                <div class="check-header">
+                    <span class="col-item">Item</span>
+                    <span class="col-price">Price</span>
+                    <span class="col-qty">Qty</span>
+                    <span class="col-subtotal">Subtotal</span>
+                    <span class="col-action"></span>
+                </div>
+                <div class="check-items" id="cart-items">
+                    <div class="empty-cart-placeholder">
+                        <p>Silakan pindai produk pertama Anda...</p>
+                    </div>
+                </div>
+                <div class="check-footer">
+                    <span>Total items: <span id="total-items-count">0</span></span>
+                    <span class="total-price" id="total-price-display">Rp 0.00</span>
+                </div>
+            </div>
+        </main>
+
+        <aside class="payment-panel">
+            <h3>Pembayaran</h3>
+            <div class="payment-summary">
+                <div class="summary-row">
+                    <span>Subtotal</span>
+                    <span id="summary-subtotal">Rp 0.00</span>
+                </div>
+                <div class="summary-row">
+                    <span>Discounts</span>
+                    <span id="summary-discount">Rp 0.00</span>
+                </div>
+                <div class="summary-total">
+                    <span>Total</span>
+                    <span id="summary-total">Rp 0.00</span>
+                </div>
+            </div>
+
+            <div id="payment-selection">
+                <button class="pay-btn" id="pay-qris-btn">Bayar dengan QRIS</button>
+            </div>
+
+            <!-- Panel ini sekarang hanya untuk status menunggu -->
+            <div id="waiting-payment-display" class="hidden">
+                <h4>Menunggu Pembayaran...</h4>
+                <p>Silakan selesaikan pembayaran pada jendela yang muncul.</p>
+                <button id="cancel-transaction-btn" class="cancel-btn">Batalkan Transaksi</button>
+            </div>
+
+            <div id="payment-success" class="hidden">
+                <h4>Pembayaran Berhasil!</h4>
+
+                <p id="success-tx-id" class="transaction-id-display"></p>
+
+                <p>Silakan ambil struk Anda.</p>
+                <button id="new-order-btn" class="print-btn">Pesanan Baru</button>
+            </div>
+        </aside>
+    </div>
+
+    <!-- MODAL ALERT KUSTOM BARU UNTUK KIOSK -->
+    <div id="kiosk-alert-modal" class="kiosk-modal-overlay hidden">
+        <div class="kiosk-modal-content">
+            <p id="kiosk-alert-message"></p>
+            <button id="kiosk-alert-close-btn">OK</button>
+        </div>
+    </div>
+
+    <!-- DIHAPUS: Library QR Code tidak lagi diperlukan -->
+    <script src="app.js"></script>
+</body>
+
+</html>
