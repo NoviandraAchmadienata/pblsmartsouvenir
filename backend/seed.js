@@ -28,15 +28,6 @@ const initialData = {
     TransactionItems: {
 
     },
-    Users: {
-        "1": {
-            id: 1,
-            username: 'admin',
-            role: 'admin',
-            // Hash untuk password 'admin123'
-            passwordHash: '$2b$10$HbEKd68m4EtcSC4OVI43ru.KUul8sSFoTnrJkik50h8nOkthEA0E.' // <-- GANTI INI DENGAN HASH YANG ANDA SALIN DARI TERMINAL
-        }
-    },
     Settings: {
         lowStockThreshold: 5
     },

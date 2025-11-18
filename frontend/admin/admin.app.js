@@ -1,19 +1,26 @@
+// --- BARU: Import fungsi yang diperlukan dari Firebase SDK ---
+import { auth } from './firebase-config.js';
+import { onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+
 document.addEventListener('DOMContentLoaded', () => {
-
-    // --- BARU: Logika Otentikasi ---
-    const token = localStorage.getItem('authToken');
-    if (!token) {
-        // Jika tidak ada token, paksa kembali ke halaman login
-        window.location.href = '../admin/login.html'; // Path relatif ke halaman login
-        return; // Hentikan eksekusi sisa skrip
-    }
-
-    // Fungsi helper untuk membuat header otentikasi
-    const getAuthHeaders = () => ({
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`
+    // --- DIPERBARUI: Logika Otentikasi dengan Firebase ---
+    // Listener ini akan memeriksa status login pengguna.
+    onAuthStateChanged(auth, async (user) => {
+        if (user) {
+            // Jika pengguna sudah login, jalankan semua logika panel admin.
+            console.log('User is logged in:', user.email);
+            await initializeAdminPanel();
+        } else {
+            // Jika pengguna tidak login, paksa kembali ke halaman login.
+            console.log('User is not logged in, redirecting to login page.');
+            window.location.href = '../admin/login.html';
+        }
     });
+});
 
+// --- BARU: Seluruh logika aplikasi dibungkus dalam fungsi ini ---
+// Ini memastikan kode hanya berjalan setelah otentikasi diverifikasi.
+async function initializeAdminPanel() {
     // === BARU: KONEKSI WEBSOCKET UNTUK ADMIN PANEL ===
     function setupAdminRfidWebSocket() {
         const WS_URL = 'ws://localhost:8080/ws/rfid';
@@ -51,13 +58,28 @@ document.addEventListener('DOMContentLoaded', () => {
         connect();
     }
 
-    // --- BARU: Logika Logout ---
+    // --- DIPERBARUI: Fungsi helper untuk membuat header otentikasi ---
+    // Fungsi ini sekarang async untuk mendapatkan ID token terbaru dari Firebase.
+    const getAuthHeaders = async () => {
+        const currentUser = auth.currentUser;
+        if (!currentUser) {
+            console.error("No authenticated user found for getting headers.");
+            // Arahkan ke login jika sesi hilang
+            window.location.href = '../admin/login.html';
+            return {};
+        }
+        const token = await currentUser.getIdToken(true); // Dapatkan ID Token (JWT)
+        return {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+        };
+    };
+
+    // --- DIPERBARUI: Logika Logout ---
     const logoutBtn = document.getElementById('logout-btn');
     logoutBtn.addEventListener('click', () => {
-        // Ganti confirm() dengan modal kustom (sudah dilakukan)
-        showConfirm('Apakah Anda yakin ingin keluar?', () => { 
-            localStorage.removeItem('authToken');
-            window.location.href = '../admin/login.html'; // Path relatif ke halaman login
+        showConfirm('Apakah Anda yakin ingin keluar?', async () => { 
+            await signOut(auth); // Firebase akan menangani redirect via onAuthStateChanged
         });
     });
 
@@ -180,9 +202,7 @@ document.addEventListener('DOMContentLoaded', () => {
         discountProductSelector.innerHTML = '<option value="">Loading...</option>';
 
         try {
-            const response = await fetch('http://localhost:3000/api/admin/products', {
-                headers: getAuthHeaders()
-            });
+            const response = await fetch('http://localhost:3000/api/admin/products', { headers: await getAuthHeaders() });
             if (!response.ok) throw new Error('Gagal mengambil produk');
             const products = await response.json();
             currentProducts = products; // Simpan produk ke cache
@@ -270,10 +290,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const productId = event.target.getAttribute('data-product-id');
         showConfirm(`Apakah Anda yakin ingin menghapus produk ID ${productId}? Tindakan ini tidak dapat dibatalkan.`, async () => {
             try {
-                const response = await fetch(`http://localhost:3000/api/admin/products/define/${productId}`, {
-                    method: 'DELETE',
-                    headers: getAuthHeaders()
-                });
+                const response = await fetch(`http://localhost:3000/api/admin/products/define/${productId}`, { method: 'DELETE', headers: await getAuthHeaders() });
                 if (!response.ok) {
                     const err = await response.json();
                     throw new Error(err.error || 'Gagal menghapus produk');
@@ -333,7 +350,7 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             const response = await fetch(`http://localhost:3000/api/admin/products/define/${id}`, {
                 method: 'PUT',
-                headers: getAuthHeaders(), 
+                headers: await getAuthHeaders(), 
                 body: JSON.stringify({ name, price })
             });
             if (!response.ok) {
@@ -397,7 +414,7 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             const response = await fetch('http://localhost:3000/api/admin/rfid/register', {
                 method: 'POST',
-                headers: getAuthHeaders(),
+                headers: await getAuthHeaders(),
                 body: JSON.stringify({ product_id: parseInt(productId), uid: uid })
             });
             const result = await response.json(); 
@@ -426,7 +443,7 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             const response = await fetch('http://localhost:3000/api/admin/products/define', { 
                 method: 'POST',
-                headers: getAuthHeaders(),
+                headers: await getAuthHeaders(),
                 body: JSON.stringify({ name, price })
             });
             const newProduct = await response.json();
@@ -463,7 +480,7 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             const response = await fetch('http://localhost:3000/api/admin/rfid/register', { 
                 method: 'POST',
-                headers: getAuthHeaders(),
+                headers: await getAuthHeaders(),
                 body: JSON.stringify({ product_id: parseInt(product_id), uid: uid })
             });
             if (!response.ok) { 
@@ -489,7 +506,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Ambil dan tampilkan pengaturan saat ini
         try {
-            const settingsResponse = await fetch('http://localhost:3000/api/admin/settings', { headers: getAuthHeaders() });
+            const settingsResponse = await fetch('http://localhost:3000/api/admin/settings', { headers: await getAuthHeaders() });
             if (!settingsResponse.ok) throw new Error('Failed to fetch settings');
             const settings = await settingsResponse.json();
             thresholdInput.value = settings.lowStockThreshold; 
@@ -501,9 +518,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Lanjutkan memuat data inventaris
         try {
-            const response = await fetch('http://localhost:3000/api/admin/inventory', {
-                headers: getAuthHeaders()
-            });
+            const response = await fetch('http://localhost:3000/api/admin/inventory', { headers: await getAuthHeaders() });
             if (!response.ok) throw new Error('Failed to fetch inventory');
             const inventory = await response.json();
 
@@ -568,7 +583,7 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             const response = await fetch('http://localhost:3000/api/admin/settings', {
                 method: 'PUT',
-                headers: getAuthHeaders(),
+                headers: await getAuthHeaders(),
                 body: JSON.stringify({ lowStockThreshold: newThreshold })
             });
             const result = await response.json();
@@ -607,7 +622,7 @@ document.addEventListener('DOMContentLoaded', () => {
     async function handleReactivateTag(event) {
         const uid = event.target.dataset.uid;
         try {
-            const response = await fetch(`http://localhost:3000/api/admin/rfid/reactivate/${uid}`, { method: 'PUT', headers: getAuthHeaders() });
+            const response = await fetch(`http://localhost:3000/api/admin/rfid/reactivate/${uid}`, { method: 'PUT', headers: await getAuthHeaders() });
             const result = await response.json();
             if (!response.ok) throw new Error(result.error || 'Failed to reactivate tag');
             showAlert(result.message); 
@@ -621,7 +636,7 @@ document.addEventListener('DOMContentLoaded', () => {
     async function handleDeleteTag(event) {
         const uid = event.target.dataset.uid;
         showConfirm(`Are you sure you want to permanently delete tag ${uid}? This cannot be undone.`, async () => {
-            await fetch(`http://localhost:3000/api/admin/rfid/delete/${uid}`, { method: 'DELETE', headers: getAuthHeaders() });
+            await fetch(`http://localhost:3000/api/admin/rfid/delete/${uid}`, { method: 'DELETE', headers: await getAuthHeaders() });
             showAlert(`Tag ${uid} has been deleted.`);
             refreshInventoryAndModal();
         });
@@ -636,7 +651,7 @@ document.addEventListener('DOMContentLoaded', () => {
             try {
                 const response = await fetch(`http://localhost:3000/api/admin/rfid/deactivate/${uid}`, {
                     method: 'PUT',
-                    headers: getAuthHeaders()
+                    headers: await getAuthHeaders()
                 });
                 const result = await response.json(); 
                 if (!response.ok) throw new Error(result.error || 'Gagal menonaktifkan tag');
@@ -670,9 +685,7 @@ document.addEventListener('DOMContentLoaded', () => {
         modalOverlay.classList.remove('hidden'); // Tampilkan modal
 
         try {
-            const response = await fetch(`http://localhost:3000/api/admin/inventory/details/${productId}`, {
-                headers: getAuthHeaders()
-            });
+            const response = await fetch(`http://localhost:3000/api/admin/inventory/details/${productId}`, { headers: await getAuthHeaders() });
             if (!response.ok) throw new Error('Gagal mengambil detail UID');
             const tags = await response.json(); // Sekarang array of objects {uid, status}
 
@@ -774,7 +787,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // 2. Jika tidak ada nama produk yang cocok, coba cari sebagai UID
         if (!matchFound) {
             try {
-            const response = await fetch(`http://localhost:3000/api/admin/tag-details/${searchTerm}`, { headers: getAuthHeaders() });
+            const response = await fetch(`http://localhost:3000/api/admin/tag-details/${searchTerm}`, { headers: await getAuthHeaders() });
             const data = await response.json();
             if (!response.ok) throw new Error(data.error || 'Tag not found.');
             // Tetap gunakan searchTerm untuk highlight
@@ -829,9 +842,7 @@ document.addEventListener('DOMContentLoaded', () => {
             queryParams += `&startDate=${startDate}&endDate=${endDate}`;
         }
         try {
-            const response = await fetch(`http://localhost:3000/api/admin/reports${queryParams}`, {
-                headers: getAuthHeaders()
-            });
+            const response = await fetch(`http://localhost:3000/api/admin/reports${queryParams}`, { headers: await getAuthHeaders() });
             if (!response.ok) { 
                 throw new Error(`Gagal mengambil laporan: ${response.statusText}`);
             }
@@ -839,11 +850,6 @@ document.addEventListener('DOMContentLoaded', () => {
             displayReport(data); 
         } catch (error) {
             console.error('Failed to get report:', error);
-            if (error.message.includes('401') || error.message.includes('403')) {
-                showAlert('Session expired or invalid. Please log in again.');
-                localStorage.removeItem('authToken'); 
-                window.location.href = '../admin/login.html';
-            }
             resultsDiv.innerHTML = `<p style="color: red;">Error: ${error.message}</p>`;
         }
     });
@@ -989,9 +995,7 @@ document.addEventListener('DOMContentLoaded', () => {
         discountProductSelector.innerHTML = '<option value="">Memuat produk...</option>';
         try {
             // Perbaikan: Tambahkan header otentikasi untuk mengambil produk
-            const productsResponse = await fetch('http://localhost:3000/api/admin/products', {
-                headers: getAuthHeaders()
-            });
+            const productsResponse = await fetch('http://localhost:3000/api/admin/products', { headers: await getAuthHeaders() });
             if (!productsResponse.ok) throw new Error('Gagal mengambil produk');
 
             const products = await productsResponse.json();
@@ -1007,9 +1011,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Muat aturan diskon yang ada
         try {
-            const response = await fetch('http://localhost:3000/api/admin/discounts', {
-                headers: getAuthHeaders()
-            });
+            const response = await fetch('http://localhost:3000/api/admin/discounts', { headers: await getAuthHeaders() });
             const discounts = await response.json();
             displayDiscountRules(discounts);
         } catch (error) {
@@ -1063,10 +1065,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const id = e.target.dataset.discountId;
                 showConfirm(`Are you sure you want to delete discount rule ID ${id}?`, async () => {
                     try {
-                        await fetch(`http://localhost:3000/api/admin/discounts/${id}`, {
-                            method: 'DELETE',
-                            headers: getAuthHeaders()
-                        });
+                        await fetch(`http://localhost:3000/api/admin/discounts/${id}`, { method: 'DELETE', headers: await getAuthHeaders() });
                         loadDiscountsPage(); // Muat ulang
                     } catch (error) {
                         showAlert('Failed to delete discount rule.');
@@ -1079,10 +1078,7 @@ document.addEventListener('DOMContentLoaded', () => {
         document.querySelectorAll('.toggle-discount-btn').forEach(btn => {
             btn.addEventListener('click', async (e) => {
                 const id = e.target.dataset.discountId;
-                await fetch(`http://localhost:3000/api/admin/discounts/${id}/toggle`, {
-                    method: 'PUT',
-                    headers: getAuthHeaders()
-                });
+                await fetch(`http://localhost:3000/api/admin/discounts/${id}/toggle`, { method: 'PUT', headers: await getAuthHeaders() });
                 loadDiscountsPage(); // Muat ulang 
             });
         });
@@ -1115,7 +1111,7 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             await fetch('http://localhost:3000/api/admin/discounts', {
                 method: 'POST',
-                headers: getAuthHeaders(), 
+                headers: await getAuthHeaders(), 
                 body: JSON.stringify(rule)
             });
             showAlert('Aturan diskon berhasil dibuat!');
@@ -1126,10 +1122,9 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    // Picu klik otomatis saat halaman dimuat
-    document.getElementById('get-report-btn').click();
-
     // === BARU: Mulai koneksi WebSocket untuk admin panel ===
     setupAdminRfidWebSocket();
 
-});
+    // Picu klik otomatis saat halaman dimuat
+    document.getElementById('get-report-btn').click();
+}
