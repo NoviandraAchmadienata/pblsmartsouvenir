@@ -21,7 +21,8 @@ app.use(express.json()); // Izinkan server menerima data JSON
 
 // --- BARU: Inisialisasi Firebase Admin SDK ---
 // Menggunakan file kredensial yang Anda berikan.
-const serviceAccount = require('./smartsouvenirshop-firebase-adminsdk-fbsvc-087dafbe12.json'); // Path relatif ke file kredensial
+// PERBAIKAN: Path disesuaikan agar benar saat dijalankan dari folder root proyek.
+const serviceAccount = require('./backend/smartsouvenirshop-firebase-adminsdk-fbsvc-087dafbe12.json');
 
 admin.initializeApp({
     credential: admin.credential.cert(serviceAccount),
