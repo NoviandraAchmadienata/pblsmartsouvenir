@@ -69,7 +69,7 @@ start "Ngrok" cmd /k "ngrok http 3000"
 echo.
 echo [5/6] Memulai Frontend Live Server...
 REM Menjalankan live-server dari dalam folder frontend
-start "Frontend Live Server" cmd /c "cd frontend/kiosk/ && live-server"
+start "Frontend Live Server" cmd /c "cd frontend/ && live-server"
 
 echo.
 echo      Menunggu server siap dalam 3 detik...
@@ -92,7 +92,8 @@ echo [2/4] Menghentikan RFID Bridge Simulator...
 taskkill /F /FI "WINDOWTITLE eq RFID Bridge" > nul
 
 echo [3/4] Menghentikan Ngrok...
-taskkill /F /FI "WINDOWTITLE eq Ngrok" > nul
+REM PERBAIKAN: Hentikan proses ngrok.exe secara langsung berdasarkan nama image-nya.
+taskkill /F /IM ngrok.exe > nul
 
 echo [4/4] Menghentikan Frontend Live Server...
 taskkill /F /FI "WINDOWTITLE eq Frontend Live Server" > nul
@@ -114,7 +115,8 @@ echo   Menghentikan RFID Bridge Simulator...
 taskkill /F /FI "WINDOWTITLE eq RFID Bridge" > nul
 
 echo   Menghentikan Ngrok...
-taskkill /F /FI "WINDOWTITLE eq Ngrok" > nul
+REM PERBAIKAN: Hentikan proses ngrok.exe secara langsung berdasarkan nama image-nya.
+taskkill /F /IM ngrok.exe > nul
 
 echo   Menghentikan Frontend Live Server...
 taskkill /F /FI "WINDOWTITLE eq Frontend Live Server" > nul

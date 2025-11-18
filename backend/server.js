@@ -151,7 +151,11 @@ app.post('/api/create-payment', async (req, res) => {
                 const productSnapshot = await db.ref(`Products/${tag.product_id}`).once('value');
                 const product = productSnapshot.val();
                 if (product) {
-                    const newItemId = await getNextId('itemId');
+                    // PERBAIKAN: Gunakan metode transaction untuk mendapatkan ID item berikutnya secara aman.
+                    const counterRef = db.ref('_counters/itemId');
+                    const result = await counterRef.transaction(currentValue => (currentValue || 0) + 1);
+                    if (!result.committed) throw new Error('Failed to increment item ID counter.');
+                    const newItemId = result.snapshot.val();
                     const newItem = {
                         item_id: newItemId,
                         transaction_id: transaction_id,
@@ -164,7 +168,6 @@ app.post('/api/create-payment', async (req, res) => {
             }
         }
 
-        // --- BARU: Buat transaksi dengan Midtrans Snap ---
         const parameters = {
             "transaction_details": {
                 "order_id": transaction_id,
