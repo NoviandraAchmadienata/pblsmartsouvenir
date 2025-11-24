@@ -1,14 +1,20 @@
-# Ignore all Firebase Admin key files
+# Ignore Firebase keys
 **/*firebase-adminsdk*.json
 **/smart-souvenir-*-firebase-adminsdk-*.json
 **/smartsouvenirshop-firebase-adminsdk-*.json
 
+# Ignore all JSON except package
 *.json
 !package.json
 !package-lock.json
-.env
-.env.* 
-GEMINI.md
 
+# Ignore logs
 logs/
 *.log
+
+# Ignore env
+.env
+.env.*
+
+# Optional
+GEMINI.md

@@ -1,48 +1,60 @@
+// Import fungsi yang diperlukan dari Firebase SDK
+import { auth } from './firebase-config.js';
+import { signInWithEmailAndPassword, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+
 document.addEventListener('DOMContentLoaded', () => {
-    // Jika sudah ada token, langsung redirect ke admin panel
-    if (localStorage.getItem('authToken')) {
-        window.location.href = '../admin/admin.html'; // Path relatif ke admin.html
-    }
+    // Cek status autentikasi pengguna saat halaman dimuat
+    onAuthStateChanged(auth, (user) => {
+        if (user) {
+            // Jika pengguna sudah login, arahkan ke panel admin
+            console.log('User is already logged in, redirecting to admin panel.');
+            window.location.href = '../admin/admin.html';
+        }
+    });
 
     const loginBtn = document.getElementById('login-btn');
-    const usernameInput = document.getElementById('username');
+    const emailInput = document.getElementById('email'); // Diubah dari username
     const passwordInput = document.getElementById('password');
     const errorDiv = document.getElementById('login-error');
 
-    async function handleLogin() {
-        const username = usernameInput.value;
+    const handleLogin = async () => {
+        const email = emailInput.value;
         const password = passwordInput.value;
         errorDiv.style.display = 'none';
 
-        try {
-            const response = await fetch('http://localhost:3000/api/auth/login', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ username, password })
-            });
-
-            const data = await response.json();
-
-            if (data.success) {
-                // Simpan token di localStorage
-                localStorage.setItem('authToken', data.token); 
-                // Redirect ke halaman admin 
-                window.location.href = '../admin/admin.html';
-            } else {
-                errorDiv.textContent = data.message || 'Login gagal.';
-                errorDiv.style.display = 'block';
-            }
-        } catch (error) {
-            console.error('Login error:', error);
-            errorDiv.textContent = 'Terjadi kesalahan. Harap coba lagi.';
+        if (!email || !password) {
+            errorDiv.textContent = 'Email dan password harus diisi.';
             errorDiv.style.display = 'block';
+            return;
         }
-    }
+
+        // Nonaktifkan tombol dan beri umpan balik ke pengguna
+        loginBtn.disabled = true;
+        loginBtn.textContent = 'Logging in...';
+
+        try {
+            // Login menggunakan Firebase Auth
+            const userCredential = await signInWithEmailAndPassword(auth, email, password);
+            // Login berhasil, Firebase akan secara otomatis menangani sesi.
+            // onAuthStateChanged di atas akan mendeteksi perubahan dan melakukan redirect.
+            console.log('Login successful:', userCredential.user);
+        } catch (error) {
+            console.error('Firebase login error:', error);
+            // Menampilkan pesan error yang lebih ramah pengguna
+            errorDiv.textContent = 'Email atau password salah. Silakan coba lagi.';
+            errorDiv.style.display = 'block';
+
+            // Aktifkan kembali tombol HANYA jika terjadi error
+            loginBtn.disabled = false;
+            loginBtn.textContent = 'Login';
+        }
+    };
 
     loginBtn.addEventListener('click', handleLogin);
     passwordInput.addEventListener('keypress', (e) => {
-        if (e.key === 'Enter') {
-            handleLogin();
-        }
+        if (e.key === 'Enter') handleLogin();
+    });
+    emailInput.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') handleLogin();
     });
 });

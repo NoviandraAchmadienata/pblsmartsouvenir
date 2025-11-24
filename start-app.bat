@@ -37,31 +37,45 @@ goto main_menu
 :start_app
 cls
 echo.
-echo [1/5] Memastikan semua dependensi proyek terinstal (npm install)...
+echo --- [PRE-START] Menghentikan semua proses lama (jika ada)... ---
+taskkill /F /FI "WINDOWTITLE eq Backend Server" > nul
+taskkill /F /FI "WINDOWTITLE eq RFID Bridge" > nul
+taskkill /F /FI "WINDOWTITLE eq Ngrok" > nul
+taskkill /F /FI "WINDOWTITLE eq Frontend Live Server" > nul
+echo Proses lama telah dihentikan.
+echo.
+
+echo.
+echo [1/6] Memastikan semua dependensi proyek terinstal (npm install)...
 call npm install
 
 echo.
-echo [2/5] Memulai Backend Server...
+echo [2/6] Memulai Backend Server...
 REM Memulai server.js di jendela terminal baru
 start "Backend Server" node backend/server.js
 
-echo [3/5] Memulai RFID Bridge Simulator...
+echo [3/6] Memulai RFID Bridge Simulator...
 REM Memulai rfid-bridge.js di jendela terminal baru
 start "RFID Bridge" node backend/rfid-bridge/rfid-bridge.js
 
-echo [4/5] Memulai Ngrok untuk Webhook...
+echo [4/6] Memulai Ngrok untuk Webhook...
 REM Perintah ini menyimpan token Anda. Cukup jalankan sekali, tapi aman dijalankan berulang kali.
 ngrok config add-authtoken 35PgPW3FlZ2QDRILmeGbtiKD9fg_3tYX3ttuDjuFygE82Kr9P
 REM Memulai ngrok di jendela baru. Pastikan ngrok sudah terinstal dan ada di PATH.
-start "Ngrok" ngrok http 3000
+REM PERUBAIKAN: Menggunakan 'cmd /k' agar jendela Ngrok tidak langsung tertutup jika ada error.
+REM Ini memungkinkan Anda untuk melihat pesan error dari Ngrok.
+start "Ngrok" cmd /k "ngrok http 3000"
 
 echo.
-echo      Menunggu server siap dalam 5 detik...
-timeout /t 5 /nobreak > nul
+echo [5/6] Memulai Frontend Live Server...
+REM Menjalankan live-server dari dalam folder frontend
+start "Frontend Live Server" cmd /c "cd frontend/ && live-server"
 
-echo [5/5] Membuka Kiosk di Browser...
-REM Membuka file index.html di browser default Anda
-start "" "frontend\kiosk\index.html"
+echo.
+echo      Menunggu server siap dalam 3 detik...
+timeout /t 3 /nobreak > nul
+
+echo [6/6] Browser akan terbuka secara otomatis.
 
 echo.
 echo SEMUA PROGRAM TELAH DIMULAI. Kembali ke menu utama...
@@ -71,14 +85,18 @@ goto main_menu
 :stop_app
 cls
 echo.
-echo [1/3] Menghentikan Backend Server...
+echo [1/4] Menghentikan Backend Server...
 taskkill /F /FI "WINDOWTITLE eq Backend Server" > nul
 
-echo [2/3] Menghentikan RFID Bridge Simulator...
+echo [2/4] Menghentikan RFID Bridge Simulator...
 taskkill /F /FI "WINDOWTITLE eq RFID Bridge" > nul
 
-echo [3/3] Menghentikan Ngrok...
-taskkill /F /FI "WINDOWTITLE eq Ngrok" > nul
+echo [3/4] Menghentikan Ngrok...
+REM PERBAIKAN: Hentikan proses ngrok.exe secara langsung berdasarkan nama image-nya.
+taskkill /F /IM ngrok.exe > nul
+
+echo [4/4] Menghentikan Frontend Live Server...
+taskkill /F /FI "WINDOWTITLE eq Frontend Live Server" > nul
 
 echo.
 echo SEMUA PROGRAM TELAH DIHENTIKAN. Kembali ke menu utama...
@@ -97,7 +115,11 @@ echo   Menghentikan RFID Bridge Simulator...
 taskkill /F /FI "WINDOWTITLE eq RFID Bridge" > nul
 
 echo   Menghentikan Ngrok...
-taskkill /F /FI "WINDOWTITLE eq Ngrok" > nul
+REM PERBAIKAN: Hentikan proses ngrok.exe secara langsung berdasarkan nama image-nya.
+taskkill /F /IM ngrok.exe > nul
+
+echo   Menghentikan Frontend Live Server...
+taskkill /F /FI "WINDOWTITLE eq Frontend Live Server" > nul
 
 echo.
 echo   Semua aplikasi telah dihentikan.
