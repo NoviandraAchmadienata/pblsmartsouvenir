@@ -47,7 +47,7 @@ start "Backend Server" node backend/server.js
 
 echo [3/5] Memulai RFID Bridge Simulator...
 REM Memulai rfid-bridge.js di jendela terminal baru
-start "RFID Bridge" node backend/rfid-bridge/rfid-bridge-simulator.js
+start "RFID Bridge" node backend/rfid-bridge/rfid-bridge.js
 
 echo [4/5] Memulai Ngrok untuk Webhook...
 REM Perintah ini menyimpan token Anda. Cukup jalankan sekali, tapi aman dijalankan berulang kali.

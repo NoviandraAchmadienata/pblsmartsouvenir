@@ -1,3 +1,14 @@
-smart-souvenir-88130-firebase-adminsdk-fbsvc-015767cf24.json
-smartsouvenirshop-firebase-adminsdk-fbsvc-087dafbe12.json
+# Ignore all Firebase Admin key files
+**/*firebase-adminsdk*.json
+**/smart-souvenir-*-firebase-adminsdk-*.json
+**/smartsouvenirshop-firebase-adminsdk-*.json
+
+*.json
+!package.json
+!package-lock.json
+.env
+.env.* 
 GEMINI.md
+
+logs/
+*.log

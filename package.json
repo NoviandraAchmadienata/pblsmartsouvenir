@@ -5,7 +5,7 @@
   "main": "admin.app.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "start": "node server.js"
+    "start": "node backend/server.js"
   },
   "keywords": [],
   "author": "",
@@ -17,8 +17,10 @@
     "express": "^5.1.0",
     "firebase-admin": "^13.6.0",
     "jsonwebtoken": "^9.0.2",
+    "live": "^0.1.25-beta.0",
     "midtrans-client": "^1.4.3",
     "serialport": "^13.0.0",
+    "server": "^1.0.42",
     "ws": "^8.18.3"
   }
 }
