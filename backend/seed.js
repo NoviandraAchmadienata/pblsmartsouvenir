@@ -5,7 +5,7 @@
 const admin = require('firebase-admin');
 
 // Gunakan file kredensial yang sama dengan server.js (path disesuaikan)
-const serviceAccount = require('./smartsouvenirshop-firebase-adminsdk-fbsvc-087dafbe12.json');
+const serviceAccount = require('./smartsouvenirshop-firebase-adminsdk-fbsvc-f144c749cb.json');
 
 admin.initializeApp({
     credential: admin.credential.cert(serviceAccount),
@@ -27,6 +27,15 @@ const initialData = {
     },
     TransactionItems: {
 
+    },
+    Users: {
+        "1": {
+            id: 1,
+            username: 'admin',
+            role: 'admin',
+            // Hash untuk password 'admin123'
+            passwordHash: '$2b$10$HbEKd68m4EtcSC4OVI43ru.KUul8sSFoTnrJkik50h8nOkthEA0E.' // <-- GANTI INI DENGAN HASH YANG ANDA SALIN DARI TERMINAL
+        }
     },
     Settings: {
         lowStockThreshold: 5

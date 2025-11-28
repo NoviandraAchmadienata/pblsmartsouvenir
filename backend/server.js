@@ -9,6 +9,8 @@
 // 7. jalankan: node server.js
 
 const express = require('express');
+const jwt = require('jsonwebtoken'); // Untuk otentikasi
+const bcrypt = require('bcryptjs'); // Untuk hash password
 const cors = require('cors'); // Diperlukan agar frontend bisa memanggil API ini
 const admin = require('firebase-admin');
 const crypto = require('crypto');
@@ -21,7 +23,7 @@ app.use(express.json()); // Izinkan server menerima data JSON
 
 // --- BARU: Inisialisasi Firebase Admin SDK ---
 // Menggunakan file kredensial yang Anda berikan.
-const serviceAccount = require('./smartsouvenirshop-firebase-adminsdk-fbsvc-087dafbe12.json'); // Path relatif ke file kredensial
+const serviceAccount = require('./smartsouvenirshop-firebase-adminsdk-fbsvc-f144c749cb.json'); // Path relatif ke file kredensial
 
 admin.initializeApp({
     credential: admin.credential.cert(serviceAccount),
@@ -30,6 +32,9 @@ admin.initializeApp({
 });
 
 const db = admin.database(); // Objek untuk berinteraksi dengan Realtime Database
+
+// Kunci rahasia untuk JWT. Di aplikasi produksi, ini HARUS disimpan di environment variable.
+const JWT_SECRET = 'your-super-secret-key-that-is-long-and-secure';
 
 // --- BARU: Konfigurasi Midtrans ---
 // PENTING: Ganti dengan kunci dari akun Midtrans Sandbox Anda.
@@ -40,7 +45,61 @@ const snap = new midtransClient.Snap({
     clientKey: 'Mid-client-78vkOQH-Z-1W_t3b'
 });
 
+// === MOCK DATABASE (DATABASE SEMENTARA) ===
+// Kita akan tetap menggunakan sebagian mockDB untuk data yang belum dimigrasi
+let mockDB = {
+    // mockDB dikosongkan karena semua data persisten sekarang dikelola oleh Firebase.
+    // Hanya data non-persisten (jika ada) yang boleh ada di sini.
+};
+
+// // Inisialisasi: Jika Anda ingin membuat hash baru saat server start
+// (async () => {
+//     const salt = await bcrypt.genSalt(10);
+//     const hash = await bcrypt.hash('admin123', salt);
+//     console.log('--- HASH BARU UNTUK "admin123" ---');
+//     console.log(hash);
+//     console.log('--- SALIN HASH DI ATAS DAN PASTE KE seed.js ---');
+// })();
+
 // ===========================================
+
+// --- 🔐 ENDPOINT UNTUK OTENTIKASI ---
+app.post('/api/auth/login', async (req, res) => {
+    const {
+        username,
+        password
+    } = req.body;
+    // Ambil data user dari Firebase
+    const usersSnapshot = await db.ref('Users').orderByChild('username').equalTo(username).once('value');
+    const usersData = usersSnapshot.val();
+
+    if (!usersData) {
+        return res.status(401).json({ success: false, message: 'Invalid credentials' });
+    }
+
+    const userId = Object.keys(usersData)[0];
+    const user = usersData[userId];
+
+    const isMatch = await bcrypt.compare(password, user.passwordHash);
+
+    if (user && isMatch) {
+        const token = jwt.sign({
+            userId: user.id,
+            role: user.role
+        }, JWT_SECRET, {
+            expiresIn: '8h'
+        });
+        res.json({
+            success: true,
+            token
+        });
+    } else {
+        res.status(401).json({
+            success: false,
+            message: 'Invalid credentials'
+        });
+    }
+});
 
 // --- 💰 ENDPOINT UNTUK DISKON (Publik) ---
 
@@ -151,11 +210,7 @@ app.post('/api/create-payment', async (req, res) => {
                 const productSnapshot = await db.ref(`Products/${tag.product_id}`).once('value');
                 const product = productSnapshot.val();
                 if (product) {
-                    // PERBAIKAN: Gunakan metode transaction untuk mendapatkan ID item berikutnya secara aman.
-                    const counterRef = db.ref('_counters/itemId');
-                    const result = await counterRef.transaction(currentValue => (currentValue || 0) + 1);
-                    if (!result.committed) throw new Error('Failed to increment item ID counter.');
-                    const newItemId = result.snapshot.val();
+                    const newItemId = await getNextId('itemId');
                     const newItem = {
                         item_id: newItemId,
                         transaction_id: transaction_id,
@@ -168,6 +223,7 @@ app.post('/api/create-payment', async (req, res) => {
             }
         }
 
+        // --- BARU: Buat transaksi dengan Midtrans Snap ---
         const parameters = {
             "transaction_details": {
                 "order_id": transaction_id,
@@ -330,14 +386,13 @@ app.get('/api/gate/check/:uid', async (req, res) => {
     const { uid } = req.params;
     try {
         const tagSnapshot = await db.ref(`RfidTags/${uid}`).once('value');
+        // PERBAIKAN: Jika tag tidak ada, berarti sudah terjual dan dihapus. Izinkan lewat.
         if (!tagSnapshot.exists()) {
-            return res.json({ allow: false, reason: 'UID not recognized' });
+            return res.json({ allow: true, reason: 'Tag is sold and removed from active inventory.' });
         }
 
         const tag = tagSnapshot.val();
-        if (tag.status === 'sold') {
-            return res.json({ allow: true });
-        } else {
+        if (tag.status !== 'sold') { // Seharusnya statusnya 'active' atau 'deactivated'
             return res.json({
                 allow: false,
                 reason: `Item not paid (status: ${tag.status})`
@@ -349,34 +404,54 @@ app.get('/api/gate/check/:uid', async (req, res) => {
     }
 });
 
-// --- 🛡️ MIDDLEWARE BARU UNTUK MEMVERIFIKASI FIREBASE ID TOKEN ---
-const verifyFirebaseToken = async (req, res, next) => {
+// --- 🛡️ MIDDLEWARE UNTUK MELINDUNGI RUTE ADMIN ---
+const verifyToken = (req, res, next) => {
     const authHeader = req.headers['authorization'];
     const token = authHeader && authHeader.split(' ')[1]; // Bearer <TOKEN>
 
     if (!token) {
-        return res.status(403).json({ message: 'A token is required for authentication' });
+        return res.status(403).json({
+            message: 'A token is required for authentication'
+        });
     }
 
     try {
-        // Verifikasi token menggunakan Firebase Admin SDK
-        const decodedToken = await admin.auth().verifyIdToken(token);
-        req.user = decodedToken; // Simpan info user yang sudah diverifikasi di request
-        console.log(`Authenticated user: ${req.user.email} (UID: ${req.user.uid})`);
-        return next();
-    } catch (error) {
-        console.error('Error verifying Firebase ID token:', error);
-        return res.status(401).json({ message: 'Invalid or expired token.' });
+        const decoded = jwt.verify(token, JWT_SECRET);
+        req.user = decoded; // Simpan info user di request
+    } catch (err) {
+        return res.status(401).json({
+            message: 'Invalid Token'
+        });
     }
+
+    // Pastikan user adalah admin
+    if (req.user.role !== 'admin') {
+        return res.status(403).json({
+            message: 'Access denied. Admin role required.'
+        });
+    }
+
+    return next();
 };
 
 // --- 👨‍💼 ENDPOINT UNTUK ADMIN PANEL (DILINDUNGI) ---
+
+// --- FUNGSI HELPER BARU untuk ID ---
+async function getNextId(counterName) {
+    const counterRef = db.ref(`_counters/${counterName}`);
+    const result = await counterRef.transaction(currentValue => {
+        // Jika counter belum ada, inisialisasi dengan 1. Jika sudah ada, tambahkan 1.
+        return (currentValue || 0) + 1;
+    });
+    // `result.snapshot.val()` akan berisi nilai baru setelah transaksi selesai.
+    return result.snapshot.val();
+}
 
 /**
  * [GET] /api/admin/settings
  * Mengambil pengaturan global aplikasi.
  */
-app.get('/api/admin/settings', verifyFirebaseToken, async (req, res) => {
+app.get('/api/admin/settings', verifyToken, async (req, res) => {
     try {
         const settingsSnapshot = await db.ref('Settings').once('value');
         res.json(settingsSnapshot.val() || { lowStockThreshold: 5 }); // Default value
@@ -390,7 +465,7 @@ app.get('/api/admin/settings', verifyFirebaseToken, async (req, res) => {
  * [PUT] /api/admin/settings
  * Memperbarui pengaturan global aplikasi.
  */
-app.put('/api/admin/settings', verifyFirebaseToken, async (req, res) => {
+app.put('/api/admin/settings', verifyToken, async (req, res) => {
     const {
         lowStockThreshold
     } = req.body;
@@ -419,7 +494,7 @@ app.put('/api/admin/settings', verifyFirebaseToken, async (req, res) => {
 /**
  * [GET] /api/admin/products
  */
-app.get('/api/admin/products', verifyFirebaseToken, async (req, res) => {
+app.get('/api/admin/products', verifyToken, async (req, res) => {
     try {
         const productsRef = db.ref('Products');
         const snapshot = await productsRef.once('value');
@@ -442,7 +517,7 @@ app.get('/api/admin/products', verifyFirebaseToken, async (req, res) => {
 /**
  * [POST] /api/admin/products/define
  */
-app.post('/api/admin/products/define', verifyFirebaseToken, async (req, res) => {
+app.post('/api/admin/products/define', verifyToken, async (req, res) => {
     const { name, price } = req.body;
 
     if (!name || !price) {
@@ -450,11 +525,7 @@ app.post('/api/admin/products/define', verifyFirebaseToken, async (req, res) => 
     }
 
     try {
-        const counterRef = db.ref('_counters/productId');
-        const result = await counterRef.transaction(currentValue => (currentValue || 0) + 1);
-        if (!result.committed) throw new Error('Failed to increment product ID counter.');
-        const newProductId = result.snapshot.val();
-
+        const newProductId = await getNextId('productId');
         const newProduct = {
             name,
             price: parseFloat(price)
@@ -474,7 +545,7 @@ app.post('/api/admin/products/define', verifyFirebaseToken, async (req, res) => 
 /**
  * [POST] /api/admin/rfid/register
  */
-app.post('/api/admin/rfid/register', verifyFirebaseToken, async (req, res) => {
+app.post('/api/admin/rfid/register', verifyToken, async (req, res) => {
     const { product_id, uid } = req.body;
 
     if (!product_id || !uid) {
@@ -510,7 +581,7 @@ app.post('/api/admin/rfid/register', verifyFirebaseToken, async (req, res) => {
 /**
  * [PUT] /api/admin/products/define/:id
  */
-app.put('/api/admin/products/define/:id', verifyFirebaseToken, async (req, res) => {
+app.put('/api/admin/products/define/:id', verifyToken, async (req, res) => {
     const { id } = req.params;
     const { name, price } = req.body;
 
@@ -540,7 +611,7 @@ app.put('/api/admin/products/define/:id', verifyFirebaseToken, async (req, res) 
 /**
  * [DELETE] /api/admin/products/define/:id
  */
-app.delete('/api/admin/products/define/:id', verifyFirebaseToken, async (req, res) => {
+app.delete('/api/admin/products/define/:id', verifyToken, async (req, res) => {
     const { id } = req.params;
     console.log(`Delete request received for Product ID: ${id}`);
 
@@ -550,7 +621,8 @@ app.delete('/api/admin/products/define/:id', verifyFirebaseToken, async (req, re
             return res.status(404).json({ error: 'Product not found' });
         }
 
-        const tagsSnapshot = await db.ref('RfidTags').orderByChild('product_id').equalTo(parseInt(id)).once('value');
+        // PERBAIKAN: Pastikan ID yang dicari adalah number, bukan string.
+        const tagsSnapshot = await db.ref('RfidTags').orderByChild('product_id').equalTo(Number(id)).once('value');
         let activeTagCount = 0;
         if (tagsSnapshot.exists()) {
             tagsSnapshot.forEach(tagSnap => {
@@ -579,7 +651,7 @@ app.delete('/api/admin/products/define/:id', verifyFirebaseToken, async (req, re
 /**
  * [GET] /api/admin/discounts
  */
-app.get('/api/admin/discounts', verifyFirebaseToken, async (req, res) => {
+app.get('/api/admin/discounts', verifyToken, async (req, res) => {
     try {
         const snapshot = await db.ref('Discounts').once('value');
         const discounts = snapshot.val() ? Object.values(snapshot.val()) : [];
@@ -592,7 +664,7 @@ app.get('/api/admin/discounts', verifyFirebaseToken, async (req, res) => {
 /**
  * [POST] /api/admin/discounts
  */
-app.post('/api/admin/discounts', verifyFirebaseToken, async (req, res) => {
+app.post('/api/admin/discounts', verifyToken, async (req, res) => {
     const {
         name,
         percentage,
@@ -609,11 +681,7 @@ app.post('/api/admin/discounts', verifyFirebaseToken, async (req, res) => {
     }
 
     try {
-        const counterRef = db.ref('_counters/discountId');
-        const result = await counterRef.transaction(currentValue => (currentValue || 0) + 1);
-        if (!result.committed) throw new Error('Failed to increment discount ID counter.');
-        const newDiscountId = result.snapshot.val();
-
+        const newDiscountId = await getNextId('discountId');
         const newDiscount = {
             id: newDiscountId,
             name,
@@ -636,7 +704,7 @@ app.post('/api/admin/discounts', verifyFirebaseToken, async (req, res) => {
 /**
  * [DELETE] /api/admin/discounts/:id
  */
-app.delete('/api/admin/discounts/:id', verifyFirebaseToken, async (req, res) => {
+app.delete('/api/admin/discounts/:id', verifyToken, async (req, res) => {
     const {
         id
     } = req.params;
@@ -656,7 +724,7 @@ app.delete('/api/admin/discounts/:id', verifyFirebaseToken, async (req, res) => 
  * [PUT] /api/admin/discounts/:id/toggle
  * Mengubah status aktif/tidak aktif sebuah aturan diskon.
  */
-app.put('/api/admin/discounts/:id/toggle', verifyFirebaseToken, async (req, res) => {
+app.put('/api/admin/discounts/:id/toggle', verifyToken, async (req, res) => {
     const {
         id
     } = req.params;
@@ -685,7 +753,7 @@ app.put('/api/admin/discounts/:id/toggle', verifyFirebaseToken, async (req, res)
 /**
  * [GET] /api/admin/inventory
  */
-app.get('/api/admin/inventory', verifyFirebaseToken, async (req, res) => {
+app.get('/api/admin/inventory', verifyToken, async (req, res) => {
     console.log('Inventory summary request received.');
     try {
         const tagsSnapshot = await db.ref('RfidTags').once('value');
@@ -737,14 +805,14 @@ app.get('/api/admin/inventory', verifyFirebaseToken, async (req, res) => {
 /**
  * [GET] /api/admin/inventory/details/:id
  */
-app.get('/api/admin/inventory/details/:id', verifyFirebaseToken, async (req, res) => {
+app.get('/api/admin/inventory/details/:id', verifyToken, async (req, res) => {
     const {
         id
     } = req.params;
     console.log(`UID detail request received for Product ID: ${id}`);
     try {
-        // Modifikasi: Ambil semua tag untuk produk ini, bukan hanya yang aktif
-        const tagsSnapshot = await db.ref('RfidTags').orderByChild('product_id').equalTo(parseInt(id)).once('value');
+        // PERBAIKAN: Pastikan ID yang dicari adalah number, bukan string.
+        const tagsSnapshot = await db.ref('RfidTags').orderByChild('product_id').equalTo(Number(id)).once('value');
         const tagList = [];
         if (tagsSnapshot.exists()) {
             tagsSnapshot.forEach(snap => {
@@ -761,7 +829,7 @@ app.get('/api/admin/inventory/details/:id', verifyFirebaseToken, async (req, res
  * [PUT] /api/admin/rfid/deactivate/:uid
  * Menonaktifkan sebuah tag RFID (misalnya karena hilang atau rusak).
  */
-app.put('/api/admin/rfid/deactivate/:uid', verifyFirebaseToken, async (req, res) => {
+app.put('/api/admin/rfid/deactivate/:uid', verifyToken, async (req, res) => {
     const { uid } = req.params;
     try {
         const tagRef = db.ref(`RfidTags/${uid}`);
@@ -788,7 +856,7 @@ app.put('/api/admin/rfid/deactivate/:uid', verifyFirebaseToken, async (req, res)
  * [PUT] /api/admin/rfid/reactivate/:uid
  * Mengaktifkan kembali sebuah tag RFID yang sebelumnya dinonaktifkan.
  */
-app.put('/api/admin/rfid/reactivate/:uid', verifyFirebaseToken, async (req, res) => {
+app.put('/api/admin/rfid/reactivate/:uid', verifyToken, async (req, res) => {
     const { uid } = req.params;
     try {
         const tagRef = db.ref(`RfidTags/${uid}`);
@@ -815,7 +883,7 @@ app.put('/api/admin/rfid/reactivate/:uid', verifyFirebaseToken, async (req, res)
  * [DELETE] /api/admin/rfid/delete/:uid
  * Menghapus sebuah tag RFID secara permanen dari database.
  */
-app.delete('/api/admin/rfid/delete/:uid', verifyFirebaseToken, async (req, res) => {
+app.delete('/api/admin/rfid/delete/:uid', verifyToken, async (req, res) => {
     const { uid } = req.params;
     try {
         const tagRef = db.ref(`RfidTags/${uid}`);
@@ -838,7 +906,7 @@ app.delete('/api/admin/rfid/delete/:uid', verifyFirebaseToken, async (req, res) 
  * [GET] /api/admin/tag-details/:uid
  * Mencari detail produk berdasarkan UID tag.
  */
-app.get('/api/admin/tag-details/:uid', verifyFirebaseToken, async (req, res) => {
+app.get('/api/admin/tag-details/:uid', verifyToken, async (req, res) => {
     const { uid } = req.params;
     try {
         const tagRef = db.ref(`RfidTags/${uid}`);
@@ -872,7 +940,7 @@ app.get('/api/admin/tag-details/:uid', verifyFirebaseToken, async (req, res) => 
 /**
  * [GET] /api/admin/reports
  */
-app.get('/api/admin/reports', verifyFirebaseToken, async (req, res) => {
+app.get('/api/admin/reports', verifyToken, async (req, res) => {
     const {
         period,
         startDate,

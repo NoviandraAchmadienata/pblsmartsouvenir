@@ -10,7 +10,7 @@ const path = require('path'); // Modul untuk menangani path file
 // === GANTI SESUAI LAPTOP KAMU ===
 // Windows biasanya: 'COM3', 'COM4', dll
 // Linux/Debian: '/dev/ttyUSB0' atau '/dev/ttyACM0'
-const SERIAL_PORT_PATH = 'COM3';      // TODO: ubah ke port Arduino kamu
+const SERIAL_PORT_PATH = 'COM5';      // TODO: ubah ke port Arduino kamu
 const SERIAL_BAUD_RATE = 9600;        // samakan dengan Serial.begin(...) di sketch Arduino
 
 // Port WebSocket yang akan diakses frontend
