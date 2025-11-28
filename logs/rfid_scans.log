@@ -1,0 +1,2 @@
+2025-11-28T14:38:02.797Z - WebSocket listening on ws://localhost:8080/ws/rfid
+2025-11-28T14:38:02.806Z - ERROR: Serial error: Opening COM5: File not found
