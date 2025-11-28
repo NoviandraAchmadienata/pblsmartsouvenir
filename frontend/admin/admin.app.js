@@ -1,26 +1,19 @@
-// --- BARU: Import fungsi yang diperlukan dari Firebase SDK ---
-import { auth } from './firebase-config.js';
-import { onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
-
 document.addEventListener('DOMContentLoaded', () => {
-    // --- DIPERBARUI: Logika Otentikasi dengan Firebase ---
-    // Listener ini akan memeriksa status login pengguna.
-    onAuthStateChanged(auth, async (user) => {
-        if (user) {
-            // Jika pengguna sudah login, jalankan semua logika panel admin.
-            console.log('User is logged in:', user.email);
-            await initializeAdminPanel();
-        } else {
-            // Jika pengguna tidak login, paksa kembali ke halaman login.
-            console.log('User is not logged in, redirecting to login page.');
-            window.location.href = '../admin/login.html';
-        }
-    });
-});
 
-// --- BARU: Seluruh logika aplikasi dibungkus dalam fungsi ini ---
-// Ini memastikan kode hanya berjalan setelah otentikasi diverifikasi.
-async function initializeAdminPanel() {
+    // --- BARU: Logika Otentikasi ---
+    const token = localStorage.getItem('authToken');
+    if (!token) {
+        // Jika tidak ada token, paksa kembali ke halaman login
+        window.location.href = '../admin/login.html'; // Path relatif ke halaman login
+        return; // Hentikan eksekusi sisa skrip
+    }
+
+    // Fungsi helper untuk membuat header otentikasi
+    const getAuthHeaders = () => ({
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+    });
+
     // === BARU: KONEKSI WEBSOCKET UNTUK ADMIN PANEL ===
     function setupAdminRfidWebSocket() {
         const WS_URL = 'ws://localhost:8080/ws/rfid';
@@ -58,28 +51,13 @@ async function initializeAdminPanel() {
         connect();
     }
 
-    // --- DIPERBARUI: Fungsi helper untuk membuat header otentikasi ---
-    // Fungsi ini sekarang async untuk mendapatkan ID token terbaru dari Firebase.
-    const getAuthHeaders = async () => {
-        const currentUser = auth.currentUser;
-        if (!currentUser) {
-            console.error("No authenticated user found for getting headers.");
-            // Arahkan ke login jika sesi hilang
-            window.location.href = '../admin/login.html';
-            return {};
-        }
-        const token = await currentUser.getIdToken(true); // Dapatkan ID Token (JWT)
-        return {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`
-        };
-    };
-
-    // --- DIPERBARUI: Logika Logout ---
+    // --- BARU: Logika Logout ---
     const logoutBtn = document.getElementById('logout-btn');
     logoutBtn.addEventListener('click', () => {
-        showConfirm('Apakah Anda yakin ingin keluar?', async () => { 
-            await signOut(auth); // Firebase akan menangani redirect via onAuthStateChanged
+        // Ganti confirm() dengan modal kustom (sudah dilakukan)
+        showConfirm('Apakah Anda yakin ingin keluar?', () => { 
+            localStorage.removeItem('authToken');
+            window.location.href = '../admin/login.html'; // Path relatif ke halaman login
         });
     });
 
@@ -94,7 +72,7 @@ async function initializeAdminPanel() {
     const modalOverlay = document.getElementById('uid-modal');
     const modalCloseBtn = document.querySelector('.modal-close-btn');
     const modalProductName = document.getElementById('modal-product-name');
-    const modalUidList = document.getElementById('modal-uid-list');
+    let modalUidList = document.getElementById('modal-uid-list');
 
     // === BARU: Referensi Elemen Modal Edit Produk ===
     const editModal = document.getElementById('edit-product-modal');
@@ -108,7 +86,7 @@ async function initializeAdminPanel() {
     // === BARU: Referensi Elemen Modal Confirm Kustom ===
     const customConfirmModal = document.getElementById('custom-confirm-modal');
     const customConfirmMessage = document.getElementById('custom-confirm-message');
-    const customConfirmOkBtn = document.getElementById('custom-confirm-ok-btn');
+    let customConfirmOkBtn = document.getElementById('custom-confirm-ok-btn');
     const customConfirmCancelBtn = document.getElementById('custom-confirm-cancel-btn');
 
     // === BARU: Referensi Elemen Modal Registrasi Tag ===
@@ -173,11 +151,14 @@ async function initializeAdminPanel() {
         customConfirmMessage.textContent = message;
         customConfirmModal.classList.remove('hidden');
 
-        // Hapus listener lama untuk mencegah panggilan ganda
+        // PERBAIKAN FINAL: Membersihkan dan menstabilkan listener konfirmasi.
+        // Hapus listener lama dengan membuat klon bersih dari tombol.
         const newOkBtn = customConfirmOkBtn.cloneNode(true);
         customConfirmOkBtn.parentNode.replaceChild(newOkBtn, customConfirmOkBtn);
+        customConfirmOkBtn = newOkBtn; // Perbarui referensi
 
-        newOkBtn.addEventListener('click', () => {
+        // Tambahkan satu listener yang bersih ke tombol baru.
+        customConfirmOkBtn.addEventListener('click', function onConfirmClick() {
             closeConfirmAlert();
             onConfirm(); // Jalankan callback konfirmasi
         });
@@ -202,7 +183,9 @@ async function initializeAdminPanel() {
         discountProductSelector.innerHTML = '<option value="">Loading...</option>';
 
         try {
-            const response = await fetch('http://localhost:3000/api/admin/products', { headers: await getAuthHeaders() });
+            const response = await fetch('http://localhost:3000/api/admin/products', {
+                headers: getAuthHeaders()
+            });
             if (!response.ok) throw new Error('Gagal mengambil produk');
             const products = await response.json();
             currentProducts = products; // Simpan produk ke cache
@@ -243,7 +226,7 @@ async function initializeAdminPanel() {
                     </td>
                 `;
             }
-            addDeleteProductListeners();
+            // addDeleteProductListeners(); // TIDAK DIPERLUKAN LAGI, diganti dengan event delegation
             addRegisterTagProductListeners(); // Panggil listener untuk tombol register tag
             addEditProductListeners(); // Panggil listener untuk tombol edit
         } catch (error) {
@@ -278,19 +261,14 @@ async function initializeAdminPanel() {
     }
 
 
-    // --- FUNGSI HAPUS DEFINISI PRODUK ---
-    function addDeleteProductListeners() {
-        document.querySelectorAll('.delete-product-btn').forEach(button => {
-            button.removeEventListener('click', handleDeleteProduct);
-            button.addEventListener('click', handleDeleteProduct);
-        });
-    }
-
     async function handleDeleteProduct(event) {
         const productId = event.target.getAttribute('data-product-id');
         showConfirm(`Apakah Anda yakin ingin menghapus produk ID ${productId}? Tindakan ini tidak dapat dibatalkan.`, async () => {
             try {
-                const response = await fetch(`http://localhost:3000/api/admin/products/define/${productId}`, { method: 'DELETE', headers: await getAuthHeaders() });
+                const response = await fetch(`http://localhost:3000/api/admin/products/define/${productId}`, {
+                    method: 'DELETE',
+                    headers: getAuthHeaders()
+                });
                 if (!response.ok) {
                     const err = await response.json();
                     throw new Error(err.error || 'Gagal menghapus produk');
@@ -303,6 +281,16 @@ async function initializeAdminPanel() {
             }
         });
     }
+
+    // --- PERBAIKAN: Gunakan Event Delegation untuk semua aksi produk ---
+    productListDiv.addEventListener('click', (event) => {
+        const target = event.target;
+        if (target.classList.contains('delete-product-btn')) {
+            handleDeleteProduct(event);
+        }
+        // Listener untuk tombol lain bisa ditambahkan di sini juga jika diinginkan
+        // Contoh: if (target.classList.contains('edit-product-btn')) { ... }
+    });
 
     // --- FUNGSI BARU: EDIT PRODUK ---
     function addEditProductListeners() {
@@ -350,7 +338,7 @@ async function initializeAdminPanel() {
         try {
             const response = await fetch(`http://localhost:3000/api/admin/products/define/${id}`, {
                 method: 'PUT',
-                headers: await getAuthHeaders(), 
+                headers: getAuthHeaders(), 
                 body: JSON.stringify({ name, price })
             });
             if (!response.ok) {
@@ -414,7 +402,7 @@ async function initializeAdminPanel() {
         try {
             const response = await fetch('http://localhost:3000/api/admin/rfid/register', {
                 method: 'POST',
-                headers: await getAuthHeaders(),
+                headers: getAuthHeaders(),
                 body: JSON.stringify({ product_id: parseInt(productId), uid: uid })
             });
             const result = await response.json(); 
@@ -443,7 +431,7 @@ async function initializeAdminPanel() {
         try {
             const response = await fetch('http://localhost:3000/api/admin/products/define', { 
                 method: 'POST',
-                headers: await getAuthHeaders(),
+                headers: getAuthHeaders(),
                 body: JSON.stringify({ name, price })
             });
             const newProduct = await response.json();
@@ -480,7 +468,7 @@ async function initializeAdminPanel() {
         try {
             const response = await fetch('http://localhost:3000/api/admin/rfid/register', { 
                 method: 'POST',
-                headers: await getAuthHeaders(),
+                headers: getAuthHeaders(),
                 body: JSON.stringify({ product_id: parseInt(product_id), uid: uid })
             });
             if (!response.ok) { 
@@ -506,7 +494,7 @@ async function initializeAdminPanel() {
 
         // Ambil dan tampilkan pengaturan saat ini
         try {
-            const settingsResponse = await fetch('http://localhost:3000/api/admin/settings', { headers: await getAuthHeaders() });
+            const settingsResponse = await fetch('http://localhost:3000/api/admin/settings', { headers: getAuthHeaders() });
             if (!settingsResponse.ok) throw new Error('Failed to fetch settings');
             const settings = await settingsResponse.json();
             thresholdInput.value = settings.lowStockThreshold; 
@@ -518,7 +506,9 @@ async function initializeAdminPanel() {
 
         // Lanjutkan memuat data inventaris
         try {
-            const response = await fetch('http://localhost:3000/api/admin/inventory', { headers: await getAuthHeaders() });
+            const response = await fetch('http://localhost:3000/api/admin/inventory', {
+                headers: getAuthHeaders()
+            });
             if (!response.ok) throw new Error('Failed to fetch inventory');
             const inventory = await response.json();
 
@@ -583,7 +573,7 @@ async function initializeAdminPanel() {
         try {
             const response = await fetch('http://localhost:3000/api/admin/settings', {
                 method: 'PUT',
-                headers: await getAuthHeaders(),
+                headers: getAuthHeaders(),
                 body: JSON.stringify({ lowStockThreshold: newThreshold })
             });
             const result = await response.json();
@@ -595,69 +585,92 @@ async function initializeAdminPanel() {
         }
     });
 
-    // --- FUNGSI BARU: Logika untuk menonaktifkan tag ---
-    function addDeactivateTagListeners() {
-        document.querySelectorAll('.deactivate-tag-btn').forEach(btn => {
-            btn.removeEventListener('click', handleDeactivateTag);
-            btn.addEventListener('click', handleDeactivateTag);
-        });
-    }
-
-    // --- FUNGSI BARU: Gabungkan semua listener aksi tag ---
-    function addTagActionListeners() {
-        document.querySelectorAll('.deactivate-tag-btn').forEach(btn => btn.addEventListener('click', handleDeactivateTag));
-        document.querySelectorAll('.reactivate-tag-btn').forEach(btn => btn.addEventListener('click', handleReactivateTag));
-        document.querySelectorAll('.delete-tag-btn').forEach(btn => btn.addEventListener('click', handleDeleteTag));
-    }
-
-    function refreshInventoryAndModal() {
+    // === PERBAIKAN: Fungsi Refresh Inventaris & Modal dengan Penanganan Active Row ===
+    async function refreshInventoryAndModal() {
+        // 1. Simpan referensi ID & Nama produk yang sedang aktif (sebelum DOM dihancurkan oleh loadInventory)
         const activeRow = document.querySelector('.inventory-row.active-row');
+        let activeProductId = null;
+        let activeProductName = null;
+
         if (activeRow) {
-            showUidDetails(activeRow.dataset.productId, activeRow.dataset.productName);
+            activeProductId = activeRow.dataset.productId;
+            activeProductName = activeRow.dataset.productName;
+            
+            // Update konten modal agar status tombol berubah (Active -> Deactivated) secara instan
+            showUidDetails(activeProductId, activeProductName);
         }
-        loadInventory();
+
+        // 2. Muat ulang tabel inventaris (Tunggu sampai selesai)
+        await loadInventory();
+
+        // 3. PENTING: Kembalikan class 'active-row' ke elemen baris yang baru dibuat
+        // Jika tidak, klik berikutnya akan gagal menemukan baris aktif karena elemen lama sudah dihapus
+        if (activeProductId) {
+            const newRows = document.querySelectorAll('.inventory-row');
+            for (const row of newRows) {
+                if (row.dataset.productId === activeProductId) {
+                    row.classList.add('active-row');
+                    break; // Berhenti looping jika sudah ketemu
+                }
+            }
+        }
     }
 
     // --- FUNGSI BARU: Logika untuk mengaktifkan kembali tag ---
     async function handleReactivateTag(event) {
         const uid = event.target.dataset.uid;
-        try {
-            const response = await fetch(`http://localhost:3000/api/admin/rfid/reactivate/${uid}`, { method: 'PUT', headers: await getAuthHeaders() });
-            const result = await response.json();
-            if (!response.ok) throw new Error(result.error || 'Failed to reactivate tag');
-            showAlert(result.message); 
-            refreshInventoryAndModal();
-        } catch (error) {
-            showAlert(`Error: ${error.message}`);
-        }
+        // PERBAIKAN: Tambahkan konfirmasi untuk konsistensi
+        showConfirm(`Apakah Anda yakin ingin mengaktifkan kembali tag RFID ${uid}?`, async () => {
+            try {
+                const response = await fetch(`http://localhost:3000/api/admin/rfid/reactivate/${uid}`, { method: 'PUT', headers: getAuthHeaders() });
+                const result = await response.json();
+                if (!response.ok) {
+                    throw new Error(result.error || 'Failed to reactivate tag');
+                }
+                showAlert(result.message); 
+                refreshInventoryAndModal(); // Panggil refresh HANYA setelah fetch berhasil
+            } catch (error) {
+                showAlert(`Error: ${error.message}`);
+            }
+        });
     }
-
+    
     // --- FUNGSI BARU: Logika untuk menghapus tag secara permanen ---
     async function handleDeleteTag(event) {
         const uid = event.target.dataset.uid;
         showConfirm(`Are you sure you want to permanently delete tag ${uid}? This cannot be undone.`, async () => {
-            await fetch(`http://localhost:3000/api/admin/rfid/delete/${uid}`, { method: 'DELETE', headers: await getAuthHeaders() });
-            showAlert(`Tag ${uid} has been deleted.`);
-            refreshInventoryAndModal();
+            try {
+                const response = await fetch(`http://localhost:3000/api/admin/rfid/delete/${uid}`, { method: 'DELETE', headers: getAuthHeaders() });
+                const result = await response.json();
+                if (!response.ok) {
+                    throw new Error(result.error || 'Failed to delete tag.');
+                }
+                showAlert(result.message || `Tag ${uid} has been deleted.`);
+                refreshInventoryAndModal(); // Panggil refresh HANYA setelah fetch berhasil
+            } catch (error) {
+                showAlert(`Error: ${error.message}`);
+            }
         });
     }
-
+    
     async function handleDeactivateTag(event) {
         const uid = event.target.dataset.uid;
         
         // Ganti confirm() dengan modal kustom (sudah dilakukan)
         showConfirm(`Apakah Anda yakin ingin menonaktifkan tag RFID ${uid}? Tindakan ini tidak dapat dibatalkan.`, async () => {
-            // Logika ini hanya akan berjalan jika admin menekan "Confirm"
+            // PERBAIKAN: Pastikan refresh dipanggil hanya setelah fetch berhasil
             try {
                 const response = await fetch(`http://localhost:3000/api/admin/rfid/deactivate/${uid}`, {
                     method: 'PUT',
-                    headers: await getAuthHeaders()
+                    headers: getAuthHeaders()
                 });
                 const result = await response.json(); 
-                if (!response.ok) throw new Error(result.error || 'Gagal menonaktifkan tag');
+                if (!response.ok) {
+                    throw new Error(result.error || 'Gagal menonaktifkan tag');
+                }
                 
                 showAlert(result.message);
-                refreshInventoryAndModal();
+                refreshInventoryAndModal(); // Panggil refresh HANYA setelah fetch berhasil
             } catch (error) {
                 showAlert(`Error: ${error.message}`);
             }
@@ -685,7 +698,9 @@ async function initializeAdminPanel() {
         modalOverlay.classList.remove('hidden'); // Tampilkan modal
 
         try {
-            const response = await fetch(`http://localhost:3000/api/admin/inventory/details/${productId}`, { headers: await getAuthHeaders() });
+            const response = await fetch(`http://localhost:3000/api/admin/inventory/details/${productId}`, {
+                headers: getAuthHeaders()
+            });
             if (!response.ok) throw new Error('Gagal mengambil detail UID');
             const tags = await response.json(); // Sekarang array of objects {uid, status}
 
@@ -737,29 +752,49 @@ async function initializeAdminPanel() {
                 }
             }
 
-            addTagActionListeners(); // Pasang listener ke semua tombol aksi
-
-            // --- LOGIKA BARU: Fitur Pencarian UID ---
-            const searchInput = document.getElementById('uid-search-input');
-            const allUidItems = modalUidList.querySelectorAll('.uid-list-item');
-
-            searchInput.addEventListener('input', () => {
-                const searchTerm = searchInput.value.toLowerCase();
-                allUidItems.forEach(item => {
-                    const uidText = item.querySelector('.uid-info span:first-child').textContent.toLowerCase();
-                    if (uidText.includes(searchTerm)) {
-                        item.style.display = 'flex';
-                    } else {
-                        item.style.display = 'none';
-                    }
-                });
-            });
-
         } catch (error) {
             console.error('Failed to load UID details:', error);
             modalUidList.innerHTML = `<p style="color: red;">Error: ${error.message}</p>`; // Tetap Error
         }
     }
+
+    // --- PERBAIKAN FINAL: Gunakan Event Delegation untuk semua aksi di modal UID ---
+    // Listener ini dipasang sekali dan akan menangani semua klik di dalam modal,
+    // tidak peduli seberapa sering kontennya diperbarui.
+    modalUidList.addEventListener('click', (event) => {
+        const target = event.target;
+        if (target.classList.contains('deactivate-tag-btn')) {
+            handleDeactivateTag(event);
+        } else if (target.classList.contains('reactivate-tag-btn')) {
+            handleReactivateTag(event);
+        } else if (target.classList.contains('delete-tag-btn')) {
+            handleDeleteTag(event);
+        }
+    });
+
+    // Listener untuk pencarian di dalam modal
+    document.getElementById('uid-search-input').addEventListener('input', (event) => {
+        const searchTerm = event.target.value.toLowerCase();
+        const allUidItems = modalUidList.querySelectorAll('.uid-list-item');
+        allUidItems.forEach(item => {
+            const uidText = item.querySelector('.uid-info span:first-child').textContent.toLowerCase();
+            item.style.display = uidText.includes(searchTerm) ? '' : 'none';
+        });
+    });
+
+    // === FUNGSI BARU: Tutup Modal ===
+    function closeModal() {
+        modalOverlay.classList.add('hidden');
+    }
+
+    // Listener untuk tombol tutup modal (X)
+    modalCloseBtn.addEventListener('click', closeModal);
+    // Listener untuk klik di luar modal
+    modalOverlay.addEventListener('click', (event) => {
+        if (event.target === modalOverlay) {
+            closeModal();
+        }
+    });
 
     // === FUNGSI DIPERBARUI: Logika untuk pencarian dari halaman inventaris (Nama Produk atau UID) ===
     async function handleInventoryUidSearch() {
@@ -787,7 +822,7 @@ async function initializeAdminPanel() {
         // 2. Jika tidak ada nama produk yang cocok, coba cari sebagai UID
         if (!matchFound) {
             try {
-            const response = await fetch(`http://localhost:3000/api/admin/tag-details/${searchTerm}`, { headers: await getAuthHeaders() });
+            const response = await fetch(`http://localhost:3000/api/admin/tag-details/${searchTerm}`, { headers: getAuthHeaders() });
             const data = await response.json();
             if (!response.ok) throw new Error(data.error || 'Tag not found.');
             // Tetap gunakan searchTerm untuk highlight
@@ -797,20 +832,6 @@ async function initializeAdminPanel() {
             }
         }
     }
-
-    // === FUNGSI BARU: Tutup Modal ===
-    function closeModal() {
-        modalOverlay.classList.add('hidden');
-    }
-
-    // Listener untuk tombol tutup modal (X)
-    modalCloseBtn.addEventListener('click', closeModal);
-    // Listener untuk klik di luar modal
-    modalOverlay.addEventListener('click', (event) => {
-        if (event.target === modalOverlay) {
-            closeModal();
-        }
-    });
 
     // === LISTENER BARU: Untuk tombol pencarian UID di inventaris ===
     document.getElementById('inventory-uid-search-btn').addEventListener('click', handleInventoryUidSearch);
@@ -842,7 +863,9 @@ async function initializeAdminPanel() {
             queryParams += `&startDate=${startDate}&endDate=${endDate}`;
         }
         try {
-            const response = await fetch(`http://localhost:3000/api/admin/reports${queryParams}`, { headers: await getAuthHeaders() });
+            const response = await fetch(`http://localhost:3000/api/admin/reports${queryParams}`, {
+                headers: getAuthHeaders()
+            });
             if (!response.ok) { 
                 throw new Error(`Gagal mengambil laporan: ${response.statusText}`);
             }
@@ -850,6 +873,11 @@ async function initializeAdminPanel() {
             displayReport(data); 
         } catch (error) {
             console.error('Failed to get report:', error);
+            if (error.message.includes('401') || error.message.includes('403')) {
+                showAlert('Session expired or invalid. Please log in again.');
+                localStorage.removeItem('authToken'); 
+                window.location.href = '../admin/login.html';
+            }
             resultsDiv.innerHTML = `<p style="color: red;">Error: ${error.message}</p>`;
         }
     });
@@ -930,7 +958,7 @@ async function initializeAdminPanel() {
         let summaryHtml = `
             <h3>Ringkasan Laporan (Periode: ${data.period})</h3>
             <div id="report-summary">
-                <p>Total Harga Asli: <strong>${formatter.format(data.summary.totalSubtotal)}</strong></p>                
+                <p>Total Harga Asli: <strong>${formatter.format(data.summary.totalSubtotal)}</strong></p> 
                 <p>Total Diskon Diberikan: <strong>${formatter.format(data.summary.totalDiscount)}</strong></p>
                 <p>Total Penjualan: <strong>${formatter.format(data.summary.totalSales)}</strong></p>
                 <p>Total Transaksi: <strong>${data.summary.totalTransactions}</strong></p>
@@ -995,7 +1023,9 @@ async function initializeAdminPanel() {
         discountProductSelector.innerHTML = '<option value="">Memuat produk...</option>';
         try {
             // Perbaikan: Tambahkan header otentikasi untuk mengambil produk
-            const productsResponse = await fetch('http://localhost:3000/api/admin/products', { headers: await getAuthHeaders() });
+            const productsResponse = await fetch('http://localhost:3000/api/admin/products', {
+                headers: getAuthHeaders()
+            });
             if (!productsResponse.ok) throw new Error('Gagal mengambil produk');
 
             const products = await productsResponse.json();
@@ -1011,7 +1041,9 @@ async function initializeAdminPanel() {
 
         // Muat aturan diskon yang ada
         try {
-            const response = await fetch('http://localhost:3000/api/admin/discounts', { headers: await getAuthHeaders() });
+            const response = await fetch('http://localhost:3000/api/admin/discounts', {
+                headers: getAuthHeaders()
+            });
             const discounts = await response.json();
             displayDiscountRules(discounts);
         } catch (error) {
@@ -1065,7 +1097,10 @@ async function initializeAdminPanel() {
                 const id = e.target.dataset.discountId;
                 showConfirm(`Are you sure you want to delete discount rule ID ${id}?`, async () => {
                     try {
-                        await fetch(`http://localhost:3000/api/admin/discounts/${id}`, { method: 'DELETE', headers: await getAuthHeaders() });
+                        await fetch(`http://localhost:3000/api/admin/discounts/${id}`, {
+                            method: 'DELETE',
+                            headers: getAuthHeaders()
+                        });
                         loadDiscountsPage(); // Muat ulang
                     } catch (error) {
                         showAlert('Failed to delete discount rule.');
@@ -1078,7 +1113,10 @@ async function initializeAdminPanel() {
         document.querySelectorAll('.toggle-discount-btn').forEach(btn => {
             btn.addEventListener('click', async (e) => {
                 const id = e.target.dataset.discountId;
-                await fetch(`http://localhost:3000/api/admin/discounts/${id}/toggle`, { method: 'PUT', headers: await getAuthHeaders() });
+                await fetch(`http://localhost:3000/api/admin/discounts/${id}/toggle`, {
+                    method: 'PUT',
+                    headers: getAuthHeaders()
+                });
                 loadDiscountsPage(); // Muat ulang 
             });
         });
@@ -1111,7 +1149,7 @@ async function initializeAdminPanel() {
         try {
             await fetch('http://localhost:3000/api/admin/discounts', {
                 method: 'POST',
-                headers: await getAuthHeaders(), 
+                headers: getAuthHeaders(), 
                 body: JSON.stringify(rule)
             });
             showAlert('Aturan diskon berhasil dibuat!');
@@ -1122,9 +1160,10 @@ async function initializeAdminPanel() {
         }
     });
 
+    // Picu klik otomatis saat halaman dimuat
+    document.getElementById('get-report-btn').click();
+
     // === BARU: Mulai koneksi WebSocket untuk admin panel ===
     setupAdminRfidWebSocket();
 
-    // Picu klik otomatis saat halaman dimuat
-    document.getElementById('get-report-btn').click();
-}
+});

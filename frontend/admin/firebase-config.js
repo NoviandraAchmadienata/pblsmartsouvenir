@@ -8,7 +8,7 @@ const firebaseConfig = {
   authDomain: "smartsouvenirshop.firebaseapp.com",
   databaseURL: "https://smartsouvenirshop-default-rtdb.asia-southeast1.firebasedatabase.app",
   projectId: "smartsouvenirshop",
-  storageBucket: "smartsouvenirshop.appspot.com",
+  storageBucket: "smartsouvenirshop.firebasestorage.app",
   messagingSenderId: "911259127417",
   appId: "1:911259127417:web:d310c42d360b7ef1480ea8",
   measurementId: "G-CBVLFN16ZF"

@@ -108,7 +108,6 @@ body {
 /* Form & Laporan */
 .form-section input[type="text"],
 .form-section input[type="password"],
-.form-section input[type="email"],
 .form-section input[type="number"],
 .form-section input[type="date"],
 .report-section input[type="text"],
@@ -120,15 +119,6 @@ body {
     border-radius: 5px;
     border: 1px solid #ccc;
     font-size: 16px;
-    transition: border-color 0.2s ease-in-out, box-shadow 0.2s ease-in-out; /* BARU: Transisi halus */
-}
-
-/* BARU: Style saat input sedang aktif (fokus) */
-.form-section input:focus,
-.report-section input:focus {
-    outline: none; /* Hapus outline default browser */
-    border-color: #007bff; /* Warna border biru sesuai tema */
-    box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.25); /* Efek "glow" biru */
 }
 
 /* Style untuk Dropdown <select> */
